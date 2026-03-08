@@ -1,0 +1,82 @@
+/* steps — 3-step horizontal with connector line (matches HowWeEngageSection.tsx) */
+
+.steps-wrapper {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 48px;
+  position: relative;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.step-number {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(235, 16, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.step-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(0, 0, 0, 0.4);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.step-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.step-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-color);
+  margin: 0 0 8px;
+  line-height: 1.3;
+}
+
+.step-desc {
+  font-size: 0.875rem;
+  color: var(--dark-color);
+  line-height: 1.65;
+  max-width: 260px;
+}
+
+.step-desc p {
+  margin: 0;
+}
+
+@media (width >= 768px) {
+  .steps-wrapper {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+
+  /* horizontal connector line between steps */
+  .steps-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 28px;
+    left: calc(16.66% + 28px);
+    right: calc(16.66% + 28px);
+    height: 1px;
+    background: var(--color-border);
+  }
+}

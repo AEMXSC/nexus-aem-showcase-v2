@@ -145,17 +145,24 @@
     "id": "card",
     "fields": [
       {
-        "component": "reference",
-        "valueType": "string",
-        "name": "image",
-        "label": "Image",
-        "multi": false
+        "component": "text",
+        "name": "icon",
+        "value": "",
+        "label": "Icon (emoji or symbol)",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "title",
+        "value": "",
+        "label": "Title",
+        "valueType": "string"
       },
       {
         "component": "richtext",
-        "name": "text",
+        "name": "description",
         "value": "",
-        "label": "Text",
+        "label": "Description",
         "valueType": "string"
       }
     ]
@@ -180,6 +187,62 @@
     ]
   },
   {
+    "id": "cta",
+    "fields": [
+      {
+        "component": "richtext",
+        "name": "content",
+        "value": "",
+        "label": "Content",
+        "valueType": "string",
+        "description": "Add H2 heading, a subheadline paragraph, then a link for the CTA button"
+      }
+    ]
+  },
+  {
+    "id": "demo-cards-item",
+    "fields": [
+      {
+        "component": "text",
+        "name": "title",
+        "value": "",
+        "label": "Title",
+        "valueType": "string"
+      },
+      {
+        "component": "richtext",
+        "name": "description",
+        "value": "",
+        "label": "Description",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "link",
+        "value": "",
+        "label": "Demo URL",
+        "valueType": "string"
+      },
+      {
+        "component": "select",
+        "name": "status",
+        "value": "coming-soon",
+        "label": "Status",
+        "valueType": "string",
+        "options": [
+          {
+            "name": "Live",
+            "value": "live"
+          },
+          {
+            "name": "Coming Soon",
+            "value": "coming-soon"
+          }
+        ]
+      }
+    ]
+  },
+  {
     "id": "fragment",
     "fields": [
       {
@@ -193,24 +256,201 @@
     "id": "hero",
     "fields": [
       {
+        "component": "text",
+        "name": "eyebrow",
+        "value": "",
+        "label": "Eyebrow",
+        "valueType": "string"
+      },
+      {
+        "component": "richtext",
+        "name": "heading",
+        "value": "",
+        "label": "Heading",
+        "valueType": "string"
+      },
+      {
+        "component": "richtext",
+        "name": "subtext",
+        "value": "",
+        "label": "Subtext",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "cta-primary-label",
+        "value": "",
+        "label": "Primary CTA Label",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "cta-primary-href",
+        "value": "",
+        "label": "Primary CTA URL",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "cta-secondary-label",
+        "value": "",
+        "label": "Secondary CTA Label",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "cta-secondary-href",
+        "value": "",
+        "label": "Secondary CTA URL",
+        "valueType": "string"
+      }
+    ]
+  },
+  {
+    "id": "revenue-motions-item",
+    "fields": [
+      {
+        "component": "text",
+        "name": "number",
+        "value": "",
+        "label": "Number (e.g. 01)",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "title",
+        "value": "",
+        "label": "Title",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "badge",
+        "value": "",
+        "label": "Badge / Tagline",
+        "valueType": "string"
+      },
+      {
+        "component": "richtext",
+        "name": "description",
+        "value": "",
+        "label": "Description",
+        "valueType": "string"
+      }
+    ]
+  },
+  {
+    "id": "steps-item",
+    "fields": [
+      {
+        "component": "text",
+        "name": "number",
+        "value": "",
+        "label": "Step Number (e.g. 01)",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "title",
+        "value": "",
+        "label": "Step Title",
+        "valueType": "string"
+      },
+      {
+        "component": "richtext",
+        "name": "description",
+        "value": "",
+        "label": "Description",
+        "valueType": "string"
+      }
+    ]
+  },
+  {
+    "id": "team",
+    "fields": [
+      {
+        "component": "text",
+        "name": "eyebrow",
+        "value": "",
+        "label": "Eyebrow",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "heading",
+        "value": "",
+        "label": "Heading",
+        "valueType": "string"
+      }
+    ]
+  },
+  {
+    "id": "team-item",
+    "fields": [
+      {
         "component": "reference",
-        "valueType": "string",
         "name": "image",
-        "label": "Image",
+        "label": "Photo",
         "multi": false
       },
       {
         "component": "text",
-        "valueType": "string",
-        "name": "imageAlt",
-        "label": "Alt",
-        "value": ""
+        "name": "name",
+        "value": "",
+        "label": "Full Name",
+        "valueType": "string"
       },
       {
-        "component": "richtext",
-        "name": "text",
+        "component": "text",
+        "name": "title",
         "value": "",
-        "label": "Text",
+        "label": "Role / Title",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "region",
+        "value": "",
+        "label": "Region",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "specialty",
+        "value": "",
+        "label": "Specialty Badge",
+        "valueType": "string"
+      }
+    ]
+  },
+  {
+    "id": "ticker",
+    "fields": [
+      {
+        "component": "richtext",
+        "name": "items",
+        "value": "",
+        "label": "Ticker Items",
+        "valueType": "string",
+        "description": "Add a bulleted list. Each bullet is one scrolling item (e.g. ✓ Deal closed: Frescopa — $280K ARR)"
+      }
+    ]
+  },
+  {
+    "id": "verticals-item",
+    "fields": [
+      {
+        "component": "text",
+        "name": "asv",
+        "value": "",
+        "label": "ASV Value",
+        "valueType": "string"
+      },
+      {
+        "component": "text",
+        "name": "name",
+        "value": "",
+        "label": "Vertical Name",
         "valueType": "string"
       }
     ]

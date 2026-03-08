@@ -28,8 +28,8 @@
       ]
     },
     {
-      "title": "Blocks",
-      "id": "blocks",
+      "title": "Nexus Blocks",
+      "id": "nexus-blocks",
       "components": [
         {
           "...": "../blocks/*/_*.json#/definitions"

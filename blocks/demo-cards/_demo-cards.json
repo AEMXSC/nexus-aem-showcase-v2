@@ -1,30 +1,30 @@
 {
   "definitions": [
     {
-      "title": "Cards",
-      "id": "cards",
+      "title": "Demo Cards",
+      "id": "demo-cards",
       "plugins": {
         "xwalk": {
           "page": {
             "resourceType": "core/franklin/components/block/v1/block",
             "template": {
-              "name": "Cards",
-              "filter": "cards"
+              "name": "Demo Cards",
+              "filter": "demo-cards"
             }
           }
         }
       }
     },
     {
-      "title": "Card",
-      "id": "card",
+      "title": "Demo Card",
+      "id": "demo-cards-item",
       "plugins": {
         "xwalk": {
           "page": {
             "resourceType": "core/franklin/components/block/v1/block/item",
             "template": {
-              "name": "Card",
-              "model": "card"
+              "name": "Demo Card",
+              "model": "demo-cards-item"
             }
           }
         }
@@ -33,15 +33,8 @@
   ],
   "models": [
     {
-      "id": "card",
+      "id": "demo-cards-item",
       "fields": [
-        {
-          "component": "text",
-          "name": "icon",
-          "value": "",
-          "label": "Icon (emoji or symbol)",
-          "valueType": "string"
-        },
         {
           "component": "text",
           "name": "title",
@@ -55,16 +48,32 @@
           "value": "",
           "label": "Description",
           "valueType": "string"
+        },
+        {
+          "component": "text",
+          "name": "link",
+          "value": "",
+          "label": "Demo URL",
+          "valueType": "string"
+        },
+        {
+          "component": "select",
+          "name": "status",
+          "value": "coming-soon",
+          "label": "Status",
+          "valueType": "string",
+          "options": [
+            { "name": "Live", "value": "live" },
+            { "name": "Coming Soon", "value": "coming-soon" }
+          ]
         }
       ]
     }
   ],
   "filters": [
     {
-      "id": "cards",
-      "components": [
-        "card"
-      ]
+      "id": "demo-cards",
+      "components": ["demo-cards-item"]
     }
   ]
 }

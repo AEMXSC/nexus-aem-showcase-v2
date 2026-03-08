@@ -1,0 +1,103 @@
+/* demo-cards — dark navy bg, two-pill header (matches DemoEnvironmentsSection.tsx) */
+
+.demo-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+.demo-card {
+  background: var(--color-card);
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.3s ease, transform 0.3s ease;
+}
+
+.demo-card:hover {
+  border-color: rgba(235, 16, 0, 0.2);
+  transform: translateY(-4px);
+}
+
+/* two-pill row at top */
+.demo-card-pills {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.demo-card-status {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 3px 10px;
+  border-radius: 9999px;
+}
+
+.demo-card-status--live {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--color-emerald);
+}
+
+.demo-card-status--coming {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.demo-card-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: rgba(235, 16, 0, 0.1);
+  color: var(--color-red);
+}
+
+.demo-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-white);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.demo-card-request {
+  margin-top: 8px;
+  width: 100%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: rgba(235, 16, 0, 0.1);
+  color: var(--color-red);
+  border: none;
+  border-radius: 9999px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.demo-card-request:hover {
+  background: var(--color-red);
+  color: var(--color-white);
+}
+
+@media (width >= 600px) {
+  .demo-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (width >= 900px) {
+  .demo-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

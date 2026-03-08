@@ -1,27 +1,76 @@
-.cards > ul {
+/* cards — 4-up capability cards (matches WhatWeDoSection.tsx) */
+
+.cards-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(257px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 24px;
 }
 
-.cards > ul > li {
-  border: 1px solid #dadada;
-  background-color: var(--background-color);
+.cards-item {
+  background-color: var(--color-navy);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.cards .cards-card-body {
-  margin: 16px;
+.cards-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
 }
 
-.cards .cards-card-image {
-  line-height: 0;
+/* icon circle — red/15 bg, red icon, turns solid red on hover */
+.cards-item-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(235, 16, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  margin-bottom: 24px;
+  transition: background 0.3s ease;
+  flex-shrink: 0;
 }
 
-.cards > ul > li img {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
+.cards-item:hover .cards-item-icon {
+  background: var(--color-red);
+}
+
+.cards-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cards-item-title {
+  color: var(--color-white);
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.cards-item-desc {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.cards-item-desc p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+@media (width >= 900px) {
+  .cards-list {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }

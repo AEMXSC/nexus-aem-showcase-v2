@@ -15,7 +15,14 @@
       "hero",
       "cards",
       "columns",
-      "fragment"
+      "fragment",
+      "cta",
+      "demo-cards",
+      "revenue-motions",
+      "steps",
+      "team",
+      "ticker",
+      "verticals"
     ]
   },
   {
@@ -37,6 +44,36 @@
       "image",
       "button",
       "title"
+    ]
+  },
+  {
+    "id": "demo-cards",
+    "components": [
+      "demo-cards-item"
+    ]
+  },
+  {
+    "id": "revenue-motions",
+    "components": [
+      "revenue-motions-item"
+    ]
+  },
+  {
+    "id": "steps",
+    "components": [
+      "steps-item"
+    ]
+  },
+  {
+    "id": "team",
+    "components": [
+      "team-item"
+    ]
+  },
+  {
+    "id": "verticals",
+    "components": [
+      "verticals-item"
     ]
   }
 ]

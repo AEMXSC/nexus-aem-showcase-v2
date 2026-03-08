@@ -19,6 +19,17 @@
   --link-color: #3b63fb;
   --link-hover-color: #1d3ecf;
 
+  /* nexus brand tokens */
+  --color-navy: #0F1923;
+  --color-red: #EB1000;
+  --color-red-dark: #c40d00;
+  --color-gold: #C9A84C;
+  --color-white: #FFFFFF;
+  --color-grey: #CCCCCC;
+  --color-card: hsl(220, 20%, 18%);
+  --color-border: #e5e7eb;
+  --color-emerald: #34d399;
+
   /* fonts */
   --body-font-family: roboto, roboto-fallback, sans-serif;
   --heading-font-family: roboto-condensed, roboto-condensed-fallback, sans-serif;
@@ -38,6 +49,10 @@
 
   /* nav height */
   --nav-height: 64px;
+
+  /* layout */
+  --container-padding: 2rem;
+  --container-max-width: 1280px;
 }
 
 /* fallback fonts */
@@ -70,22 +85,55 @@
   }
 }
 
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   display: none;
   margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
   background-color: var(--background-color);
   color: var(--text-color);
   font-family: var(--body-font-family);
   font-size: var(--body-font-size-m);
   line-height: 1.6;
+  /* grid layout: header takes real flow space, nav-wrapper is the fixed element */
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 100%;
+  min-height: 100dvh;
 }
 
 body.appear {
-  display: block;
+  display: grid;
 }
 
 header {
-  height: var(--nav-height);
+  grid-row: 1;
+  height: var(--nav-height); /* reserves flow space; header .nav-wrapper is position:fixed */
+}
+
+main {
+  grid-row: 2;
+}
+
+main:has(.hero-wrapper-container:first-child) {
+  padding-top: 0;
+}
+
+footer {
+  grid-row: 3;
+}
+
+.nav-wrapper {
+  max-width: 100% !important;
+  width: 100%;
 }
 
 header .header,
@@ -227,15 +275,46 @@ main img {
   width: 100%;
 }
 
+/* inner content wrapper — max-width lives here, not on the section */
+.section-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* sections */
 main > .section {
-  margin: 40px 0;
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
 }
 
 main > .section > div {
   max-width: 1200px;
-  margin: auto;
-  padding: 0 24px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  box-sizing: border-box;
+}
+
+main .block {
+  padding-left: var(--container-padding);
+  padding-right: var(--container-padding);
+}
+
+/* full-bleed exceptions — hero and ticker bypass the 1200px constraint */
+.hero-wrapper,
+.ticker-wrapper {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.hero-wrapper > .hero {
+  max-width: 100% !important;
+  width: 100% !important;
 }
 
 main > .section:first-of-type {
@@ -244,7 +323,16 @@ main > .section:first-of-type {
 
 @media (width >= 900px) {
   main > .section > div {
-    padding: 0 32px;
+    padding: 0 2rem;
+  }
+
+  /* full-bleed blocks must never get side padding, even inside media queries */
+  main .section:has(> div > .hero) > div,
+  main .section:has(> div > .ticker) > div,
+  main .section:has(> div > .cta) > div,
+  main .section:has(> div > .revenue-motions) > div {
+    padding: 0 !important;
+    max-width: 100% !important;
   }
 }
 
@@ -254,4 +342,93 @@ main .section.highlight {
   background-color: var(--light-color);
   margin: 0;
   padding: 40px 0;
+}
+
+/* full-bleed blocks: collapse section margins + padding */
+main .section:has(> div > .hero),
+main .section:has(> div > .ticker),
+main .section:has(> div > .cta),
+main .section:has(> div > .revenue-motions) {
+  margin: 0;
+  padding: 0;
+}
+
+main .section:has(> div > .hero) > div,
+main .section:has(> div > .ticker) > div,
+main .section:has(> div > .cta) > div,
+main .section:has(> div > .revenue-motions) > div {
+  max-width: unset;
+  padding: 0;
+  width: 100%;
+}
+
+/* hero: force full viewport width at every level — padding lives inside .hero, not on wrappers */
+main .section:has(> div > .hero) {
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* === HERO FULL BLEED OVERRIDE — must stay at bottom === */
+main > div:first-child {
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.hero-wrapper {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* HERO - exact DOM selector from DevTools */
+.section.hero-wrapper-container {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* TICKER - already correct per DevTools */
+.section.ticker-wrapper-container {
+  max-width: unset !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* NAV - exact selector from DevTools */
+.header-wrapper {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+.hero-wrapper-wrapper {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.hero-wrapper.block {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.hero-wrapper-container,
+.hero-wrapper-wrapper,
+.hero-wrapper.block {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-wrapper-wrapper,
+.hero-wrapper.block {
+  flex: 1;
 }

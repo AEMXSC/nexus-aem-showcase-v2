@@ -1,0 +1,119 @@
+/* revenue-motions — 3-up dark cards with expand-on-hover (matches RevenueMotionsSection.tsx) */
+
+.revenue-motions-container,
+.revenue-motions-wrapper {
+  max-width: unset;
+  padding: 0;
+  margin: 0;
+}
+
+.revenue-motions {
+  /* block sits inside a section with inline bg on index.html */
+}
+
+.motions-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+.motion-card {
+  background: var(--color-card);
+  border-radius: 16px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 0.3s ease, transform 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.motion-card:hover {
+  border-color: rgba(235, 16, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+/* large faint red number — matches source: text-primary/20 */
+.motion-number {
+  font-size: clamp(4rem, 8vw, 5.5rem);
+  font-weight: 900;
+  line-height: 1;
+  color: rgba(235, 16, 0, 0.2);
+  display: block;
+  margin-bottom: 16px;
+  letter-spacing: -0.04em;
+  font-family: var(--heading-font-family);
+}
+
+.motion-title {
+  color: var(--color-white);
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  line-height: 1.3;
+}
+
+.motion-desc {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+/* tag pill — transparent red bg, red text (matches source: bg-primary/10 text-primary) */
+.motion-tag {
+  display: inline-block;
+  background: rgba(235, 16, 0, 0.1);
+  color: var(--color-red);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  margin-bottom: 16px;
+  align-self: flex-start;
+}
+
+/* expandable proof block — hidden by default, shown on hover */
+.motion-proof {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 16px;
+  margin-top: 8px;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
+  overflow: hidden;
+}
+
+.motion-card:hover .motion-proof {
+  grid-template-rows: 1fr;
+}
+
+.motion-proof p {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin: 0 0 12px;
+  overflow: hidden;
+}
+
+.motion-proof-link {
+  display: inline-block;
+  color: var(--color-red);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.motion-proof-link:hover {
+  text-decoration: underline;
+}
+
+@media (width >= 768px) {
+  .motions-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

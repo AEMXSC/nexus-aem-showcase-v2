@@ -1,0 +1,94 @@
+/* cta — dark foreground bg, two buttons (matches CTASection.tsx) */
+
+.cta-container,
+.cta-wrapper {
+  max-width: unset;
+  padding: 0;
+  margin: 0;
+}
+
+.cta {
+  background-color: var(--color-navy);
+  text-align: center;
+  padding: 80px 24px;
+}
+
+.cta-inner {
+  max-width: 640px;
+  margin: auto;
+}
+
+.cta h2,
+.cta h3 {
+  color: var(--color-white);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 900;
+  margin: 0 0 16px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.cta p {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1.1rem;
+  line-height: 1.6;
+  font-weight: 300;
+  margin: 0 auto 40px;
+  max-width: 480px;
+}
+
+.cta-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+.cta-buttons p {
+  margin: 0;
+}
+
+/* Primary — solid red */
+.cta a.button.primary {
+  background-color: var(--color-red) !important;
+  border-color: var(--color-red) !important;
+  color: var(--color-white) !important;
+  border-radius: 4px;
+  padding: 0.75em 2em;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.cta a.button.primary:hover {
+  background-color: var(--color-red-dark) !important;
+  border-color: var(--color-red-dark) !important;
+  text-decoration: none;
+}
+
+/* Secondary — outline (white border on dark bg) */
+.cta a.button.secondary {
+  background-color: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: var(--color-white) !important;
+  border-radius: 4px;
+  padding: 0.75em 2em;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.cta a.button.secondary:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  text-decoration: none;
+}
+
+@media (width >= 900px) {
+  .cta {
+    padding: 100px 32px;
+  }
+}

@@ -1,0 +1,96 @@
+/* team — dark navy bg, gradient red avatar, red initials (matches TeamRosterSection.tsx) */
+
+.team-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+.team-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: var(--color-card);
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid transparent;
+  transition: border-color 0.3s ease, transform 0.3s ease;
+}
+
+.team-card:hover {
+  border-color: rgba(235, 16, 0, 0.2);
+  transform: translateY(-4px);
+}
+
+/* gradient red avatar with red initials */
+.team-avatar {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(235, 16, 0, 0.25) 0%, rgba(235, 16, 0, 0.05) 100%);
+  box-shadow: inset 0 0 0 1px rgba(235, 16, 0, 0.2);
+  color: var(--color-red);
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.3s ease;
+}
+
+.team-card:hover .team-avatar {
+  background: linear-gradient(135deg, rgba(235, 16, 0, 0.4) 0%, rgba(235, 16, 0, 0.15) 100%);
+}
+
+.team-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.team-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-role {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* vertical badge — transparent red pill (matches source: bg-primary/20 text-primary rounded-full) */
+.team-badge {
+  display: inline-block;
+  margin-top: 8px;
+  background: rgba(235, 16, 0, 0.2);
+  color: var(--color-red);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  width: fit-content;
+}
+
+@media (width >= 600px) {
+  .team-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (width >= 900px) {
+  .team-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

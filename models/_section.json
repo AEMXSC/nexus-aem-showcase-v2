@@ -50,7 +50,14 @@
         "hero",
         "cards",
         "columns",
-        "fragment"
+        "fragment",
+        "cta",
+        "demo-cards",
+        "revenue-motions",
+        "steps",
+        "team",
+        "ticker",
+        "verticals"
       ]
     }
   ]
