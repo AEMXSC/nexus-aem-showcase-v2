@@ -377,7 +377,9 @@ Before pushing to GitHub:
 - [ ] Mobile layout checked at 375px viewport
 - [ ] All images have alt text
 - [ ] No lorem ipsum anywhere — production-intent content only
+- [ ] Lighthouse 100 on mobile AND desktop — verify via https://pagespeed.web.dev/ on the aem.live URL
 - [ ] AEM Code Sync GitHub app installed on repo
+- [ ] Do NOT add robots.txt Disallow during development — aem.page and aem.live are blocked from crawlers by default
 
 ---
 
@@ -526,17 +528,15 @@ Select `nexus-aem-showcase` during install.
 Without this, code changes in GitHub never reach the CDN. The site serves stale blocks forever.
 
 **2. Sidekick Browser Extension**
-Install at: `https://chromewebstore.google.com/detail/aem-sidekick/ccfggkjabjahcjoljmgmklhpaccedipo`
+Install at: `https://chromewebstore.google.com/detail/aem-sidekick/igkmdomcgoebiipaifhmpfjhbjccggml`
 
-Create `.sidekick/config.json` in the repo root:
-```json
-{
-  "project": "Nexus AEM Showcase",
-  "host": "main--nexus-aem-showcase--AEMXSC.aem.live",
-  "previewHost": "main--nexus-aem-showcase--AEMXSC.aem.page"
-}
-```
-Without this file, Sidekick cannot connect to this specific project.
+Works on Chrome and all Chromium-based browsers. For Microsoft Edge: go to `edge://extensions` → enable "Allow extensions from other stores" → then install from the Chrome Web Store link above.
+
+After installing, add the project to Sidekick:
+1. Navigate to `https://main--nexus-aem-showcase--AEMXSC.aem.page/` in your browser
+2. Click the Sidekick icon → click the context menu (≡) → **Add this project**
+
+Sidekick will then recognise all URLs for this project automatically. No config file needed for basic use.
 
 **3. head.html — Universal Editor Connection Tag**
 `head.html` in the repo root must contain:
@@ -560,7 +560,7 @@ UE reads `component-definition.json`, `component-models.json`, and `component-fi
 | Live site | `https://main--nexus-aem-showcase--AEMXSC.aem.live` |
 | Open Universal Editor | `https://experience.adobe.com/#/aem/editor/canvas/https://main--nexus-aem-showcase--AEMXSC.aem.page` |
 | AEM CS Author | `https://author-pXXXXX-eXXXXX.adobeaemcloud.com` |
-| Install Sidekick | `https://chromewebstore.google.com/detail/aem-sidekick/ccfggkjabjahcjoljmgmklhpaccedipo` |
+| Install Sidekick | `https://chromewebstore.google.com/detail/aem-sidekick/igkmdomcgoebiipaifhmpfjhbjccggml` |
 | Install Code Sync | `https://github.com/apps/aem-code-sync` |
 
 Preview URLs (`aem.page`) are for authoring and QA only — do not share with customers.
@@ -627,3 +627,71 @@ Do NOT paste external image URLs into content fields. They bypass DAM governance
 - **Asset Picker doesn't open** → user does not have DAM read permissions on the AEM CS program
 - **Page renders blank** → `fstab.yaml` is misconfigured or xwalk connector is not set up on the Cloud Manager program
 - **UE shows visual but can't edit** → page was not published to `aem.page` preview first, or UE is being opened on the `aem.live` URL instead of `aem.page`
+
+---
+
+## xwalk-Specific Gotchas (learned from CitiSignal production setup)
+
+These are silent failure points that won't show obvious errors. Check them before assuming the code is broken.
+
+### paths.json
+
+`paths.json` in the repo root maps the AEM content path to the EDS URL path. If your AEM site was created with a folder name that differs from the default, this file must be updated.
+
+Default (leave as-is if AEM site name matches repo name):
+```json
+{
+  "mappings": [
+    "/content/nexus-aem-showcase/:/"
+  ]
+}
+```
+
+If your AEM site was created as `/content/nexus` or any other name, update the left side of the mapping to match. Wrong path = pages load blank with no error.
+
+### Metadata Spreadsheet (Author + Publish URLs)
+
+This is separate from the page-level metadata block. It is a spreadsheet file inside the AEM Sites admin for the project that holds the Author URL and Publish URL used by the xwalk connector and UE.
+
+To fill it in:
+1. Go to AEM Sites admin → open the nexus-aem-showcase site
+2. Find the "Metadata" file — open it
+3. Fill in the Author URL: `https://author-pXXXXX-eXXXXX.adobeaemcloud.com`
+4. Fill in the Publish URL: `https://publish-pXXXXX-eXXXXX.adobeaemcloud.com`
+
+**Critical: use Chrome for this step. Safari breaks the metadata spreadsheet editor.**
+
+### No Trailing Slash on Author/Publish URLs
+
+The Author and Publish URLs in the metadata spreadsheet must NOT have a trailing slash.
+
+```
+✅ Correct:   https://author-p152653-e1583859.adobeaemcloud.com
+❌ Wrong:     https://author-p152653-e1583859.adobeaemcloud.com/
+```
+
+A trailing slash causes silent failures — blocks that depend on AEM data don't render, and there is no console error pointing to the cause.
+
+### fstab.yaml Points to AEM Author (not da.live)
+
+In the xwalk model, `fstab.yaml` points to the AEM CS author instance, not da.live or SharePoint.
+
+```yaml
+mountpoints:
+  /:
+    url: https://author-pXXXXX-eXXXXX.adobeaemcloud.com/bin/franklin.delivery/AEMXSC/nexus-aem-showcase/main
+```
+
+The exact URL format depends on the xwalk connector version installed on the Cloud Manager program. Check an existing working xwalk project (e.g. CitiSignal) to confirm the correct URL pattern for your AEM CS environment.
+
+### GraphQL Endpoint (only if using Content Fragments)
+
+If any blocks in Nexus use Content Fragments (CF block, dynamic data), a GraphQL endpoint must be created and published in AEM before those blocks will render. Steps:
+
+1. Tools → General → Configuration Browser → your site folder → Publish
+2. Tools → General → GraphQL → Create → name it → select your site's CF schema
+3. Select the new endpoint → Publish
+4. Dismiss the security console prompt (configure permissions separately if needed)
+5. Tools → General → GraphQL Query Editor → change dropdown to your endpoint → select and Publish each query
+
+For the initial Nexus showcase build, Content Fragments are not used. Skip this unless a CF-driven block is added later.

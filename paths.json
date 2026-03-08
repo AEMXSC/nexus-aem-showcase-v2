@@ -1,8 +1,8 @@
 {
   "mappings": [
-    "/content/aem-boilerplate/:/"
+    "/content/nexus-aem-showcase/:/"
   ],
   "includes": [
-    "/content/aem-boilerplate/"
+    "/content/nexus-aem-showcase/"
   ]
 }
