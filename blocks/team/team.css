@@ -18,7 +18,7 @@
 }
 
 .team-card:hover {
-  border-color: rgba(235, 16, 0, 0.2);
+  border-color: rgb(235 16 0 / 20%);
   transform: translateY(-4px);
 }
 
@@ -28,8 +28,8 @@
   height: 56px;
   min-width: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(235, 16, 0, 0.25) 0%, rgba(235, 16, 0, 0.05) 100%);
-  box-shadow: inset 0 0 0 1px rgba(235, 16, 0, 0.2);
+  background: linear-gradient(135deg, rgb(235 16 0 / 25%) 0%, rgb(235 16 0 / 5%) 100%);
+  box-shadow: inset 0 0 0 1px rgb(235 16 0 / 20%);
   color: var(--color-red);
   font-size: 0.9rem;
   font-weight: 700;
@@ -41,7 +41,22 @@
 }
 
 .team-card:hover .team-avatar {
-  background: linear-gradient(135deg, rgba(235, 16, 0, 0.4) 0%, rgba(235, 16, 0, 0.15) 100%);
+  background: linear-gradient(135deg, rgb(235 16 0 / 40%) 0%, rgb(235 16 0 / 15%) 100%);
+}
+
+/* image avatar — circular crop */
+.team-avatar-img {
+  background: none;
+  box-shadow: none;
+  overflow: hidden;
+  padding: 0;
+}
+
+.team-avatar-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .team-info {
@@ -63,7 +78,7 @@
 
 .team-role {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgb(255 255 255 / 50%);
   line-height: 1.4;
   margin-top: 2px;
 }
@@ -72,8 +87,8 @@
 .team-badge {
   display: inline-block;
   margin-top: 8px;
-  background: rgba(235, 16, 0, 0.2);
-  color: var(--color-red);
+  background: rgb(235 16 0 / 20%);
+  color: #f87171;
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;

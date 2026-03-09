@@ -11,22 +11,22 @@
  */
 
 :root {
-  /* colors */
-  --background-color: white;
-  --light-color: #f8f8f8;
-  --dark-color: #505050;
-  --text-color: #131313;
-  --link-color: #3b63fb;
-  --link-hover-color: #1d3ecf;
+  /* colors — dark navy theme */
+  --background-color: #0F1923;
+  --light-color: #1a2633;
+  --dark-color: rgb(255 255 255 / 50%);
+  --text-color: #fff;
+  --link-color: #EB1000;
+  --link-hover-color: #ff2a14;
 
   /* nexus brand tokens */
   --color-navy: #0F1923;
   --color-red: #EB1000;
   --color-red-dark: #c40d00;
   --color-gold: #C9A84C;
-  --color-white: #FFFFFF;
-  --color-grey: #CCCCCC;
-  --color-card: hsl(220, 20%, 18%);
+  --color-white: #FFF;
+  --color-grey: #CCC;
+  --color-card: hsl(220deg 20% 18%);
   --color-border: #e5e7eb;
   --color-emerald: #34d399;
 
@@ -103,20 +103,18 @@ body {
   font-family: var(--body-font-family);
   font-size: var(--body-font-size-m);
   line-height: 1.6;
-  /* grid layout: header takes real flow space, nav-wrapper is the fixed element */
+}
+
+body.appear {
   display: grid;
   grid-template-rows: auto 1fr auto;
   grid-template-columns: 100%;
   min-height: 100dvh;
 }
 
-body.appear {
-  display: grid;
-}
-
 header {
   grid-row: 1;
-  height: var(--nav-height); /* reserves flow space; header .nav-wrapper is position:fixed */
+  height: 0; /* nav-wrapper is position:fixed, no flow space needed */
 }
 
 main {
@@ -129,6 +127,8 @@ main:has(.hero-wrapper-container:first-child) {
 
 footer {
   grid-row: 3;
+  background-color: var(--color-navy) !important;
+  border-top: 1px solid rgb(255 255 255 / 5%);
 }
 
 .nav-wrapper {
@@ -157,7 +157,7 @@ h6 {
   font-family: var(--heading-font-family);
   font-weight: 600;
   line-height: 1.25;
-  scroll-margin: 40px;
+  scroll-margin: 80px;
 }
 
 h1 { font-size: var(--heading-font-size-xxl); }
@@ -287,8 +287,9 @@ main img {
 /* sections */
 main > .section {
   margin: 0;
-  padding: 0;
+  padding: 96px 0;
   max-width: 100%;
+  background-color: var(--background-color);
 }
 
 main > .section > div {
@@ -329,8 +330,7 @@ main > .section:first-of-type {
   /* full-bleed blocks must never get side padding, even inside media queries */
   main .section:has(> div > .hero) > div,
   main .section:has(> div > .ticker) > div,
-  main .section:has(> div > .cta) > div,
-  main .section:has(> div > .revenue-motions) > div {
+  main .section:has(> div > .cta) > div {
     padding: 0 !important;
     max-width: 100% !important;
   }
@@ -344,19 +344,56 @@ main .section.highlight {
   padding: 40px 0;
 }
 
+/* section eyebrow — red uppercase label used before h2 */
+.section-eyebrow,
+main > .section > div > p:first-child {
+  color: #ef4444;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+main > .section > div > p:first-child::before {
+  content: '';
+  display: block;
+  width: 1.5rem;
+  height: 2px;
+  background: var(--color-red);
+  flex-shrink: 0;
+}
+
+/* section headings — white with tight tracking */
+main > .section > div > h2 {
+  font-family: var(--heading-font-family);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 900;
+  color: var(--color-white);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0 0 3rem;
+}
+
+/* verticals section uses lighter-on-dark card style */
+.section.verticals-container h2 {
+  color: var(--color-white);
+}
+
 /* full-bleed blocks: collapse section margins + padding */
 main .section:has(> div > .hero),
 main .section:has(> div > .ticker),
-main .section:has(> div > .cta),
-main .section:has(> div > .revenue-motions) {
+main .section:has(> div > .cta) {
   margin: 0;
   padding: 0;
 }
 
 main .section:has(> div > .hero) > div,
 main .section:has(> div > .ticker) > div,
-main .section:has(> div > .cta) > div,
-main .section:has(> div > .revenue-motions) > div {
+main .section:has(> div > .cta) > div {
   max-width: unset;
   padding: 0;
   width: 100%;
@@ -365,21 +402,6 @@ main .section:has(> div > .revenue-motions) > div {
 /* hero: force full viewport width at every level — padding lives inside .hero, not on wrappers */
 main .section:has(> div > .hero) {
   max-width: 100% !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-/* === HERO FULL BLEED OVERRIDE — must stay at bottom === */
-main > div:first-child {
-  padding: 0 !important;
-  margin: 0 !important;
-  max-width: 100% !important;
-  width: 100% !important;
-}
-
-.hero-wrapper {
-  max-width: 100% !important;
-  width: 100% !important;
   padding: 0 !important;
   margin: 0 !important;
 }
@@ -406,23 +428,7 @@ main > div:first-child {
   padding: 0 !important;
 }
 
-.hero-wrapper-wrapper {
-  max-width: 100% !important;
-  width: 100% !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-.hero-wrapper.block {
-  max-width: 100% !important;
-  width: 100% !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-.hero-wrapper-container,
-.hero-wrapper-wrapper,
-.hero-wrapper.block {
+.hero-wrapper-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -430,5 +436,12 @@ main > div:first-child {
 
 .hero-wrapper-wrapper,
 .hero-wrapper.block {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   flex: 1;
 }

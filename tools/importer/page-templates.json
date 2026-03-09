@@ -1,0 +1,12 @@
+{
+  "templates": [
+    {
+      "name": "homepage",
+      "urls": [
+        "https://nexus-aem-showcase.lovable.app/"
+      ],
+      "description": "Landing page for Adobe XSC showcase — hero, capabilities, revenue motions, verticals, team, demo environments, and CTA sections",
+      "blocks": []
+    }
+  ]
+}

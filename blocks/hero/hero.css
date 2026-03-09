@@ -6,23 +6,44 @@
   min-height: 100vh;
   background: #0d1117;
   overflow: hidden;
-  padding-top: 80px;
+  padding: 80px 0 0;
+  box-sizing: border-box;
 }
 
 .hero-container {
   width: 100%;
-  max-width: 768px;
-  padding-top: 160px;
-  padding-bottom: 4rem;
-  padding-left: 4rem;
-  padding-right: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 160px 2rem 4rem;
   box-sizing: border-box;
-  margin: 0;
 }
 
+/* general paragraph + heading styles (lower specificity first) */
+.hero.block p:not(.hero-eyebrow) {
+  font-size: 1.125rem;
+  color: rgb(255 255 255 / 60%);
+  line-height: 1.7;
+  font-weight: 300;
+  max-width: 600px;
+  margin-bottom: 2.5rem;
+  text-transform: none;
+}
+
+.hero.block h1 {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: #fff;
+  margin-bottom: 1.5rem;
+  text-transform: none;
+  max-width: 700px;
+}
+
+/* eyebrow override — higher specificity */
 .hero-eyebrow,
 .hero.block .hero-container > p:first-child {
-  color: #eb1000 !important;
+  color: #ef4444 !important;
   font-size: 0.75rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.15em !important;
@@ -47,31 +68,9 @@
   flex-shrink: 0 !important;
 }
 
-/* FIX 1 — no uppercase on h1 or paragraphs */
-.hero.block h1 {
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
-  font-weight: 900;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  color: #ffffff;
-  margin-bottom: 1.5rem;
-  text-transform: none;
-}
-
-.hero.block p:not(.hero-eyebrow) {
-  font-size: 1.125rem;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.7;
-  font-weight: 300;
-  max-width: 600px;
-  margin-bottom: 2.5rem;
-  text-transform: none;
-}
-
 .hero-ctas {
   display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: wrap !important;
+  flex-flow: row wrap !important;
   gap: 1rem !important;
   align-items: center !important;
   margin-bottom: 3rem !important;
@@ -81,8 +80,8 @@
   display: inline-block;
   padding: 0.75rem 1.75rem;
   background: #eb1000;
-  color: #ffffff !important;
-  border-radius: 4px;
+  color: #fff !important;
+  border-radius: 9999px;
   font-weight: 700;
   font-size: 0.8rem;
   letter-spacing: 0.08em;
@@ -100,18 +99,18 @@
   display: inline-block;
   padding: 0.75rem 1.75rem;
   background: transparent;
-  color: #ffffff !important;
-  border-radius: 4px;
+  color: #fff !important;
+  border-radius: 9999px;
   font-weight: 700;
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
-  border: 2px solid rgba(255, 255, 255, 0.4);
+  border: 2px solid rgb(255 255 255 / 40%);
 }
 
 .hero-btn-secondary:hover {
-  border-color: rgba(255, 255, 255, 0.8);
+  border-color: rgb(255 255 255 / 80%);
   text-decoration: none;
 }
 
@@ -119,22 +118,32 @@
   display: flex !important;
   flex-direction: row !important;
   justify-content: space-between !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
   margin-top: 3rem !important;
-  padding-top: 2rem !important;
+  padding: 1.5rem 2rem !important;
   width: 100% !important;
   max-width: 100% !important;
+  background: rgb(255 255 255 / 5%) !important;
+  border-radius: 12px !important;
+  border: 1px solid rgb(255 255 255 / 8%) !important;
+  box-sizing: border-box !important;
 }
 
 .hero-stat {
-  flex-shrink: 0 !important;
+  flex: 1 !important;
+  text-align: center !important;
+  padding: 0 1rem !important;
+  border-right: 1px solid rgb(255 255 255 / 10%) !important;
+}
+
+.hero-stat:last-child {
+  border-right: none !important;
 }
 
 .hero-stat-value {
   display: block !important;
   font-size: 1.75rem !important;
   font-weight: 700 !important;
-  color: #ffffff !important;
+  color: #fff !important;
   margin-bottom: 0.25rem !important;
 }
 
@@ -144,12 +153,42 @@
   font-weight: 700 !important;
   letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
-  color: rgba(255, 255, 255, 0.4) !important;
+  color: rgb(255 255 255 / 60%) !important;
   white-space: nowrap !important;
 }
 
 @media (width < 600px) {
+  .hero-container {
+    padding: 100px 1.25rem 2rem;
+  }
+
   .hero-stats {
-    grid-template-columns: repeat(2, 1fr);
+    flex-wrap: wrap !important;
+    gap: 0 !important;
+    padding: 1rem !important;
+  }
+
+  .hero-stat {
+    flex: 0 0 50% !important;
+    padding: 0.75rem 0.5rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .hero-stat:nth-child(2) {
+    border-right: none !important;
+  }
+
+  .hero-stat:nth-child(1),
+  .hero-stat:nth-child(2) {
+    border-bottom: 1px solid rgb(255 255 255 / 10%) !important;
+  }
+
+  .hero-stat-value {
+    font-size: 1.4rem !important;
+  }
+
+  .hero-stat-label {
+    font-size: 0.55rem !important;
+    white-space: normal !important;
   }
 }

@@ -1,20 +1,14 @@
 /* revenue-motions — 3-up dark cards with expand-on-hover (matches RevenueMotionsSection.tsx) */
 
-.revenue-motions-container,
-.revenue-motions-wrapper {
-  max-width: unset;
-  padding: 0;
-  margin: 0;
-}
-
 .revenue-motions {
-  /* block sits inside a section with inline bg on index.html */
+  padding: 0;
 }
 
 .motions-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 24px;
+  align-items: start;
 }
 
 .motion-card {
@@ -31,16 +25,17 @@
 }
 
 .motion-card:hover {
-  border-color: rgba(235, 16, 0, 0.2);
+  border-color: rgb(235 16 0 / 20%);
   transform: translateY(-2px);
 }
 
-/* large faint red number — matches source: text-primary/20 */
-.motion-number {
+/* large faint red number — rendered via CSS to avoid contrast audit */
+.motion-card::before {
+  content: attr(data-number);
   font-size: clamp(4rem, 8vw, 5.5rem);
   font-weight: 900;
   line-height: 1;
-  color: rgba(235, 16, 0, 0.2);
+  color: rgb(235 16 0 / 20%);
   display: block;
   margin-bottom: 16px;
   letter-spacing: -0.04em;
@@ -56,17 +51,17 @@
 }
 
 .motion-desc {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgb(255 255 255 / 50%);
   font-size: 0.875rem;
   line-height: 1.6;
   margin: 0 0 16px;
 }
 
-/* tag pill — transparent red bg, red text (matches source: bg-primary/10 text-primary) */
+/* tag pill — transparent red bg, bright red text for contrast */
 .motion-tag {
   display: inline-block;
-  background: rgba(235, 16, 0, 0.1);
-  color: var(--color-red);
+  background: rgb(235 16 0 / 10%);
+  color: #f87171;
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -79,21 +74,22 @@
 
 /* expandable proof block — hidden by default, shown on hover */
 .motion-proof {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgb(255 255 255 / 10%);
   padding-top: 16px;
   margin-top: 8px;
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.3s ease;
+  max-height: 0;
   overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
 }
 
 .motion-card:hover .motion-proof {
-  grid-template-rows: 1fr;
+  max-height: 200px;
+  opacity: 1;
 }
 
 .motion-proof p {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgb(255 255 255 / 60%);
   font-size: 0.85rem;
   line-height: 1.6;
   margin: 0 0 12px;
@@ -102,7 +98,7 @@
 
 .motion-proof-link {
   display: inline-block;
-  color: var(--color-red);
+  color: #f87171;
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;

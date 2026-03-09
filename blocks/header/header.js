@@ -14,6 +14,9 @@ export default function decorate(block) {
             AEM <span class="nav-logo-xsc">XSC</span>
           </span>
         </a>
+        <button class="nav-hamburger" aria-label="Menu" aria-expanded="false">
+          <span class="nav-hamburger-icon"></span>
+        </button>
         <ul class="nav-links">
           <li><a href="#work">What We Do</a></li>
           <li><a href="#motions">Motions</a></li>
@@ -27,6 +30,20 @@ export default function decorate(block) {
   `;
 
   const navWrapper = headerEl.querySelector('.nav-wrapper');
+  const hamburger = headerEl.querySelector('.nav-hamburger');
+  const navLinks = headerEl.querySelector('.nav-links');
+
+  hamburger.addEventListener('click', () => {
+    const isOpen = navWrapper.classList.toggle('nav-open');
+    hamburger.setAttribute('aria-expanded', isOpen);
+  });
+
+  navLinks.addEventListener('click', (e) => {
+    if (e.target.tagName === 'A') {
+      navWrapper.classList.remove('nav-open');
+      hamburger.setAttribute('aria-expanded', 'false');
+    }
+  });
 
   window.addEventListener('scroll', () => {
     if (window.scrollY > 50) {

@@ -11,7 +11,7 @@ export default function decorate(block) {
     card.className = 'demo-card';
     card.innerHTML = `
       <div class="demo-card-pills">
-        <span class="demo-card-status demo-card-status--${isLive ? 'live' : 'coming'}">
+        <span class="demo-card-status demo-card-status-${isLive ? 'live' : 'coming'}">
           ${isLive ? '● Live' : 'Coming Soon'}
         </span>
         ${badge ? `<span class="demo-card-badge">${badge}</span>` : ''}

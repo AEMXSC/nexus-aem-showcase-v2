@@ -22,9 +22,9 @@
 }
 
 .vertical-card:hover {
-  border-color: rgba(235, 16, 0, 0.2);
+  border-color: rgb(235 16 0 / 20%);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 8%);
 }
 
 .vertical-card-bar {
@@ -63,8 +63,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: rgba(235, 16, 0, 0.1);
-  color: var(--color-red);
+  background: rgb(235 16 0 / 10%);
+  color: #b91c1c;
   padding: 4px 10px;
   border-radius: 9999px;
 }
@@ -79,8 +79,23 @@
 
 .vertical-label {
   font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgb(0 0 0 / 60%);
   margin: 0;
+}
+
+@media (width < 600px) {
+  .verticals-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .vertical-card {
+    padding: 20px;
+  }
+
+  .vertical-asv {
+    font-size: 1.5rem;
+  }
 }
 
 @media (width >= 768px) {

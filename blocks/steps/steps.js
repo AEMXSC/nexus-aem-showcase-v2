@@ -19,7 +19,7 @@ export default function decorate(block) {
   });
 
   const wrapper = document.createElement('div');
-  wrapper.className = 'steps-wrapper';
+  wrapper.className = 'steps-grid';
   items.forEach((step) => wrapper.append(step));
 
   block.innerHTML = '';

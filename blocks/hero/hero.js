@@ -1,15 +1,12 @@
 export default function decorate(block) {
-  // Actual content is at block > div > p > div
-  const raw = block.querySelector(':scope > div > p > div');
+  // Find content: try xwalk richtext nesting first, then fall back to first cell
+  let raw = block.querySelector(':scope > div > div > div');
+  if (!raw) raw = block.querySelector(':scope > div > div');
+  if (!raw) raw = block.querySelector(':scope > div');
   if (!raw) {
-    console.error('Hero: could not find content div');
-    return;
+    // Treat the block itself as the content container
+    raw = block;
   }
-
-  console.log('Found raw, children:', [...raw.children].map((el) => el.tagName + ': ' + el.textContent.trim().substring(0, 40)));
-
-  // Remove HR
-  [...raw.querySelectorAll('hr')].forEach((hr) => hr.remove());
 
   const kids = [...raw.children];
   const allParaNoLink = kids.filter((el) => el.tagName === 'P' && !el.querySelector('a'));
@@ -56,7 +53,7 @@ export default function decorate(block) {
       ctaWrap.appendChild(btn);
     }
   });
-  container.appendChild(ctaWrap);
+  if (ctaWrap.children.length) container.appendChild(ctaWrap);
 
   // 5. Stats
   if (ulEl) {
@@ -81,12 +78,4 @@ export default function decorate(block) {
 
   block.innerHTML = '';
   block.appendChild(container);
-
-  const h1 = container.querySelector('h1');
-  if (h1) h1.style.maxWidth = '600px';
-  const subtext = container.querySelector('.hero-subtext');
-  if (subtext) subtext.style.maxWidth = '560px';
-
-  container.style.cssText = 'padding-top: 180px; padding-bottom: 4rem; padding-left: 2rem; padding-right: 2rem; max-width: 1280px; box-sizing: border-box; margin: 0 auto; width: 100%;';
-  console.log('Hero decorated successfully');
 }

@@ -18,7 +18,7 @@
 }
 
 .demo-card:hover {
-  border-color: rgba(235, 16, 0, 0.2);
+  border-color: rgb(235 16 0 / 20%);
   transform: translateY(-4px);
 }
 
@@ -40,14 +40,14 @@
   border-radius: 9999px;
 }
 
-.demo-card-status--live {
-  background: rgba(52, 211, 153, 0.15);
+.demo-card-status-live {
+  background: rgb(52 211 153 / 15%);
   color: var(--color-emerald);
 }
 
-.demo-card-status--coming {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.4);
+.demo-card-status-coming {
+  background: rgb(255 255 255 / 5%);
+  color: rgb(255 255 255 / 60%);
 }
 
 .demo-card-badge {
@@ -57,8 +57,8 @@
   letter-spacing: 0.1em;
   padding: 3px 10px;
   border-radius: 9999px;
-  background: rgba(235, 16, 0, 0.1);
-  color: var(--color-red);
+  background: rgb(235 16 0 / 10%);
+  color: #f87171;
 }
 
 .demo-card-title {
@@ -76,8 +76,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: rgba(235, 16, 0, 0.1);
-  color: var(--color-red);
+  background: rgb(235 16 0 / 10%);
+  color: #f87171;
   border: none;
   border-radius: 9999px;
   padding: 10px 16px;

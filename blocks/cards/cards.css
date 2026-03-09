@@ -12,7 +12,7 @@
 .cards-item {
   background-color: var(--color-navy);
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgb(255 255 255 / 6%);
   padding: 32px;
   display: flex;
   flex-direction: column;
@@ -21,7 +21,7 @@
 
 .cards-item:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 20px 40px rgb(0 0 0 / 35%);
 }
 
 /* icon circle — red/15 bg, red icon, turns solid red on hover */
@@ -29,7 +29,7 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: rgba(235, 16, 0, 0.15);
+  background: rgb(235 16 0 / 15%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -58,7 +58,7 @@
 }
 
 .cards-item-desc {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgb(255 255 255 / 50%);
   font-size: 0.875rem;
   line-height: 1.6;
   margin: 0;
@@ -66,7 +66,7 @@
 
 .cards-item-desc p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgb(255 255 255 / 50%);
 }
 
 @media (width >= 900px) {
