@@ -14,7 +14,7 @@ export default function decorate(block) {
       <h3 class="motion-title">${title}</h3>
       <p class="motion-desc">${cells[1]?.querySelector('p')?.textContent || cells[1]?.textContent.replace(title, '').trim() || ''}</p>
       ${tag ? `<span class="motion-tag">${tag}</span>` : ''}
-      ${proof ? `<div class="motion-proof"><p>${proof}</p><a href="#demos" class="motion-proof-link">Build This Demo <span aria-hidden="true">\u2192</span></a></div>` : ''}`;
+      ${proof ? `<div class="motion-proof"><p>${proof}</p><a href="#demo-environments" class="motion-proof-link">Build This Demo <span aria-hidden="true">\u2192</span></a></div>` : ''}`;
     return card;
   });
 

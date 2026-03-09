@@ -15,11 +15,11 @@ export default async function decorate(block) {
           </div>
         </div>
         <nav class="footer-nav">
-          <a href="#team">Team</a>
-          <a href="#verticals">Verticals</a>
-          <a href="#motions">Motions</a>
-          <a href="#demos">Demos</a>
-          <a href="#engage">Engage</a>
+          <a href="#the-team">Team</a>
+          <a href="#vertical-coverage">Verticals</a>
+          <a href="#the-three-revenue-motions">Motions</a>
+          <a href="#demo-environments">Demos</a>
+          <a href="#how-we-engage">Engage</a>
         </nav>
         <div class="footer-meta">
           <span class="footer-powered">Powered by AEM Edge Delivery Services</span>
