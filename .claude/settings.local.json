@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npx stylelint:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx:*)",
+      "Bash(git clone:*)",
+      "Bash(aem up:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(node:*)",
+      "WebFetch(domain:www.aem.live)",
+      "WebSearch"
+    ]
+  }
+}
