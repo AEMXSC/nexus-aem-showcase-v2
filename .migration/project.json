@@ -3,6 +3,6 @@
   "libraryUrl": null,
   "hasBlockLibrary": false,
   "sourceUrl": "https://nexus-aem-showcase.lovable.app/",
-  "type": "xwalk",
-  "contentHostUrl": "author-p126422-e1471131.adobeaemcloud.com"
+  "type": "da",
+  "contentHostUrl": "content.da.live"
 }

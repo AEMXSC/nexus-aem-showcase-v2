@@ -1,5 +1,5 @@
 {
-  "project": "Nexus AEM Showcase",
-  "host": "main--xscteamsite--Remekie.aem.live",
-  "previewHost": "main--xscteamsite--Remekie.aem.page"
+  "project": "AEM XSC Team Site",
+  "host": "main--xscteamsite--aemxsc.aem.live",
+  "previewHost": "main--xscteamsite--aemxsc.aem.page"
 }
