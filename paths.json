@@ -1,8 +1,8 @@
 {
   "mappings": [
-    "/content/nexus-aem-showcase/:/"
+    "/content/test/:/"
   ],
   "includes": [
-    "/content/nexus-aem-showcase/"
+    "/content/test/"
   ]
 }
