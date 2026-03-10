@@ -204,7 +204,7 @@ export async function loadPage() {
     import('../tools/da/da.js').then((mod) => mod.default(loadPage));
   }
   if (searchParams.has('quick-edit')) {
-    import('../tools/quick-edit/quick-edit.js').then((mod) => mod.default());
+    import('../tools/quick-edit/quick-edit.js').then((mod) => mod.default(loadPage));
   }
 }());
 
