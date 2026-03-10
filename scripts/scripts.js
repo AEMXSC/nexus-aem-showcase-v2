@@ -88,6 +88,65 @@ async function loadFonts() {
 }
 
 /**
+ * Detects flat CDN content and rebuilds block structure from
+ * table-based HTML stored in GitHub. Converts <hr> to section
+ * boundaries and <table> to block divs.
+ */
+async function ensureBlockStructure(main) {
+  if (window.location.hostname === 'localhost') return;
+  const sections = main.querySelectorAll(':scope > div');
+  const hasBlocks = main.querySelector('div[class]:not(.section):not([class^="default"])');
+  if (sections.length > 1 || hasBlocks) return;
+
+  try {
+    const path = window.location.pathname === '/' ? '/index' : window.location.pathname.replace(/\/$/, '');
+    const resp = await fetch(`https://raw.githubusercontent.com/AEMXSC/XSCTeamSite/main/content${path}.html`);
+    if (!resp.ok) return;
+
+    const html = await resp.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const source = doc.querySelector('main');
+    if (!source) return;
+
+    main.innerHTML = '';
+    let section = document.createElement('div');
+
+    [...source.children].forEach((child) => {
+      if (child.tagName === 'HR') {
+        if (section.children.length) {
+          main.appendChild(section);
+          section = document.createElement('div');
+        }
+      } else if (child.tagName === 'TABLE') {
+        const th = child.querySelector('tr:first-child th');
+        if (th) {
+          const blockName = toClassName(th.textContent.trim());
+          const block = document.createElement('div');
+          block.className = blockName;
+          child.querySelectorAll('tr:not(:first-child)').forEach((row) => {
+            const rowDiv = document.createElement('div');
+            row.querySelectorAll('td').forEach((cell) => {
+              const cellDiv = document.createElement('div');
+              cellDiv.innerHTML = cell.innerHTML;
+              rowDiv.appendChild(cellDiv);
+            });
+            block.appendChild(rowDiv);
+          });
+          section.appendChild(block);
+        }
+      } else {
+        section.appendChild(child.cloneNode(true));
+      }
+    });
+    if (section.children.length) main.appendChild(section);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('Block structure rebuild failed', e);
+  }
+}
+
+/**
  * Builds all synthetic blocks in a container element.
  * @param {Element} main The container element
  */
@@ -105,7 +164,8 @@ function buildAutoBlocks() {
  * @param {Element} main The main element
  */
 // eslint-disable-next-line import/prefer-default-export
-export function decorateMain(main) {
+export async function decorateMain(main) {
+  await ensureBlockStructure(main);
   // hopefully forward compatible button decoration
   decorateButtons(main);
   decorateIcons(main);
@@ -135,7 +195,7 @@ async function loadEager(doc) {
 
   const main = doc.querySelector('main');
   if (main) {
-    decorateMain(main);
+    await decorateMain(main);
     await loadSection(main.querySelector('.section'), waitForFirstImage);
     document.body.classList.add('appear');
   }
