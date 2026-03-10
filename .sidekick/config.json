@@ -1,5 +1,15 @@
 {
   "project": "AEM XSC Team Site",
   "host": "main--xscteamsite--aemxsc.aem.live",
-  "previewHost": "main--xscteamsite--aemxsc.aem.page"
+  "previewHost": "main--xscteamsite--aemxsc.aem.page",
+  "plugins": [
+    {
+      "id": "da-edit",
+      "title": "Edit in DA",
+      "url": "https://da.live/edit#/AEMXSC/XSCTeamSite{path}",
+      "isPalette": false,
+      "passConfig": false,
+      "event": "custom:da-edit"
+    }
+  ]
 }
