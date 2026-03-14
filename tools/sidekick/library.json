@@ -1,0 +1,16 @@
+{
+  "blocks": {
+    "data": [
+      { "name": "Hero", "path": "/tools/sidekick/blocks/hero" },
+      { "name": "Cards", "path": "/tools/sidekick/blocks/cards" },
+      { "name": "Columns", "path": "/tools/sidekick/blocks/columns" },
+      { "name": "CTA", "path": "/tools/sidekick/blocks/cta" },
+      { "name": "Demo Cards", "path": "/tools/sidekick/blocks/demo-cards" },
+      { "name": "Revenue Motions", "path": "/tools/sidekick/blocks/revenue-motions" },
+      { "name": "Steps", "path": "/tools/sidekick/blocks/steps" },
+      { "name": "Team", "path": "/tools/sidekick/blocks/team" },
+      { "name": "Ticker", "path": "/tools/sidekick/blocks/ticker" },
+      { "name": "Verticals", "path": "/tools/sidekick/blocks/verticals" }
+    ]
+  }
+}
