@@ -1,5 +1,8 @@
 {
-  "project": "AEM XWalk Boilerplate",
-  "editUrlLabel": "AEM Editor",
-  "editUrlPattern": "{{contentSourceUrl}}{{pathname}}?cmd=open"
+  "project": "AEM XSC Team Site",
+  "host": "main--xscteamsite--aemxsc.aem.live",
+  "previewHost": "main--xscteamsite--aemxsc.aem.page",
+  "contentSourceUrl": "https://da.live/edit#/AEMXSC/XSCTeamSite",
+  "editUrlLabel": "Edit in DA",
+  "editUrlPattern": "https://da.live/edit#/AEMXSC/XSCTeamSite{{pathname}}"
 }
