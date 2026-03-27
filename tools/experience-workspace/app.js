@@ -754,6 +754,52 @@ async function runServicesPanel() {
   addRawHTML(`<div class="agent-badge">Entitlements</div><div class="message-content">${entHTML}</div>`);
 }
 
+/* ── Block Library ── */
+const BLOCK_CATALOG = [
+  { name: 'Hero', variants: '—', cols: '1 col, 3 rows', use: 'Page banner with background image, headline, CTA' },
+  { name: 'Cards', variants: '(no images)', cols: '2 col or 1 col', use: 'Feature grids, article lists, product cards' },
+  { name: 'Columns', variants: '—', cols: 'N columns', use: 'Side-by-side content layouts' },
+  { name: 'Tabs', variants: '—', cols: '2 col', use: 'Tabbed content sections' },
+  { name: 'Accordion', variants: '—', cols: '2 col', use: 'FAQs, collapsible content' },
+  { name: 'Carousel', variants: '—', cols: '2 col', use: 'Rotating slides with image + text' },
+  { name: 'Table', variants: 'striped, bordered, no header', cols: 'N col', use: 'Data tables, comparison grids' },
+  { name: 'Video', variants: '—', cols: '1 col', use: 'Standalone embedded video' },
+  { name: 'Embed', variants: 'video, social', cols: '1 col', use: 'YouTube, Vimeo, Twitter embeds' },
+  { name: 'Search', variants: '—', cols: '1 col', use: 'Site search with query index' },
+];
+
+async function runBlockLibrary() {
+  addMessage('user', 'Show available EDS block library');
+
+  let html = '<strong>AEM EDS Block Library</strong>';
+  html += '<div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px">Source: sta-xwalk-boilerplate (same as AEMCoder)</div>';
+  html += '<table class="gov-results" style="margin-top:6px"><tr><th>Block</th><th>Variants</th><th>Structure</th><th>Use Case</th></tr>';
+  BLOCK_CATALOG.forEach((b) => {
+    html += `<tr><td><strong>${b.name}</strong></td><td><code>${b.variants}</code></td><td>${b.cols}</td><td>${b.use}</td></tr>`;
+  });
+  html += '</table>';
+  html += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">10 standard blocks + system blocks (Header, Footer, Metadata, Section Metadata, Fragment)</div>';
+
+  addRawHTML(`<div class="agent-badge">Block Library</div><div class="message-content">${html}</div>`);
+
+  addTyping(); await sleep(500); removeTyping();
+
+  // Show local project blocks
+  const localBlocks = ['cards', 'carousel', 'columns', 'cta', 'demo-cards', 'footer', 'fragment', 'header', 'hero', 'revenue-motions', 'steps', 'team', 'ticker', 'verticals'];
+  let localHTML = '<strong>Project Blocks (this repo)</strong>';
+  localHTML += '<div class="issue-list" style="margin-top:8px">';
+  localBlocks.forEach((b) => {
+    const isStandard = BLOCK_CATALOG.some((c) => c.name.toLowerCase() === b);
+    const icon = isStandard ? '✓' : '★';
+    const label = isStandard ? 'standard' : 'custom';
+    localHTML += `<div class="issue-item ${isStandard ? 'fixable' : ''}">${icon} <strong>${b}</strong> <span style="color:var(--text-muted)">${label}</span></div>`;
+  });
+  localHTML += '</div>';
+  localHTML += `<div class="money-line">${localBlocks.length} blocks deployed · ${localBlocks.filter((b) => !BLOCK_CATALOG.some((c) => c.name.toLowerCase() === b)).length} custom blocks</div>`;
+
+  addRawHTML(`<div class="agent-badge">Block Inventory</div><div class="message-content">${localHTML}</div>`);
+}
+
 /* ── Flow 2/3: Performance & Personalize (demo only for now) ── */
 async function runPerformanceFlow() {
   addMessage('user', 'How is the landing page performing?');
@@ -811,6 +857,7 @@ const FLOWS = {
   personalize: runPersonalizeFlow,
   workfront: runWorkfrontPanel,
   services: runServicesPanel,
+  blocks: runBlockLibrary,
 };
 
 /* ── User Input ── */
@@ -823,6 +870,7 @@ function matchSpecializedFlow(text) {
   if (lower.includes('personal') || lower.includes('segment') || lower.includes('variant')) return runPersonalizeFlow;
   if (lower.includes('workfront') || lower.includes('project health') || lower.includes('project status')) return runWorkfrontPanel;
   if (lower.includes('mcp') || lower.includes('services') || lower.includes('entitlement') || lower.includes('connected services')) return runServicesPanel;
+  if (lower.includes('block') || lower.includes('library') || lower.includes('catalog') || lower.includes('component')) return runBlockLibrary;
   if (lower.includes('review asset') || lower.includes('brand review') || lower.includes('brand check')) return runAIReviewer;
   if (lower.includes('overdue') || lower.includes('pending approval') || lower.includes('capacity') || lower.includes('workload')) {
     return () => runWorkfrontQuery(text);

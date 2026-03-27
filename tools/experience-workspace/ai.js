@@ -101,8 +101,23 @@ Basic block markup:
 </div>
 \`\`\`
 
-**Boilerplate blocks**: Hero, Columns, Cards, Header, Footer, Metadata, Section Metadata
-**Block Collection**: Embed, Fragment, Table, Video, Accordion, Breadcrumbs, Carousel, Modal, Quote, Search, Tabs
+**Standard Block Library** (same as AEMCoder — sta-boilerplate / sta-xwalk-boilerplate):
+
+| Block | Variants | Structure | Use Case |
+|-------|----------|-----------|----------|
+| Hero | — | 1 col, 3 rows: image + title/CTA | Page banner, above fold |
+| Cards | (no images) | 2 col: image + text per card | Feature grids, article lists |
+| Columns | — | N columns side-by-side | Split content layouts |
+| Tabs | — | 2 col: label + content | Tabbed sections |
+| Accordion | — | 2 col: title + body | FAQs, collapsible content |
+| Carousel | — | 2 col: image + text per slide | Rotating promotions |
+| Table | (striped), (bordered), (no header) | N col data grid | Data tables |
+| Video | — | 1 col: poster + URL | Standalone video |
+| Embed | (video), (social) | 1 col: URL (YouTube/Vimeo/Twitter) | External media |
+| Search | — | 1 col: query-index.json URL | Site search |
+
+**System blocks**: Header, Footer, Metadata, Section Metadata, Fragment
+Library: \`https://main--sta-xwalk-boilerplate--aemysites.aem.page/tools/sidekick/library.json\`
 
 ### Content Structure
 - Sections: separated by \`---\` (horizontal rule) in authored documents

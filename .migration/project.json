@@ -1,7 +1,8 @@
 {
-  "type": "da",
+  "type": "xwalk",
   "contentHostUrl": "https://content.da.live/aemxsc/xscteamsite/",
-  "libraryUrl": "https://main--xscteamsite--aemxsc.aem.page/tools/sidekick/library.json",
-  "boilerplate": "xscteamsite",
-  "sourceUrl": "https://main--xscteamsite--aemxsc.aem.page"
+  "libraryUrl": "https://main--sta-xwalk-boilerplate--aemysites.aem.page/tools/sidekick/library.json",
+  "libraryUrlDoc": "https://main--sta-boilerplate--aemdemos.aem.page/tools/sidekick/library.json",
+  "boilerplate": "sta-xwalk-boilerplate",
+  "sourceUrl": "https://main--nexus-aem-showcase-v2--aemxsc.aem.page"
 }
