@@ -141,6 +141,16 @@ Basic block markup:
 - Redirects: spreadsheet-based, 301 only (other codes at CDN level)
 - Push invalidation supported for Cloudflare, Fastly, Akamai, CloudFront
 
+### EDS Importer Pipeline (Document → Live Page)
+- Drop a .docx into a connected SharePoint or Google Drive folder
+- The importer pipeline auto-converts it to an EDS page
+- Flow: Author in Word/Docs → Save to connected folder → AEM Code Sync picks it up → Preview at .page → Publish to .live
+- This is the "author in Word, publish to EDS" story — incredibly powerful for content teams
+- No developer intervention needed once the pipeline is set up
+- Content authors work in familiar tools (Word, Google Docs) and pages appear on the site
+- Images, tables, and formatting are preserved and mapped to EDS blocks automatically
+- Bulk import is also supported for migrating entire sites at scale
+
 ### Universal Editor (xwalk projects)
 - WYSIWYG editing with persistent changes to AEM as a Cloud Service
 - Components = blocks, configured in Properties panel

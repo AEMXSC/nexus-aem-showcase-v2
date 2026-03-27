@@ -564,7 +564,11 @@ async function runDemoBrief() {
 
   await sleep(800);
   loadPreview();
-  addRawHTML(`<div class="agent-badge">Experience Production</div><div class="message-content"><strong>✓ Page created: Mediterranean Summer Campaign</strong><br><br><table class="gov-results"><tr><th>Check</th><th>Status</th></tr><tr><td>Governance</td><td class="count-pass">96% compliant</td></tr><tr><td>Assets</td><td class="count-pass">4 approved, 0 flagged</td></tr><tr><td>Workfront</td><td>Task PCL-2847 created</td></tr><tr><td>Launch</td><td>Ready for editorial review</td></tr></table><div class="money-line">That was 14 people and 3 weeks of work. You just watched it happen in one conversation.</div></div>`);
+  addRawHTML(`<div class="agent-badge">Experience Production</div><div class="message-content"><strong>✓ Page created: Mediterranean Summer Campaign</strong><br><br><table class="gov-results"><tr><th>Check</th><th>Status</th></tr><tr><td>Governance</td><td class="count-pass">96% compliant</td></tr><tr><td>Assets</td><td class="count-pass">4 approved, 0 flagged</td></tr><tr><td>Workfront</td><td>Task PCL-2847 created</td></tr><tr><td>AEM Launch</td><td>Ready for editorial review</td></tr><tr><td>AJO</td><td>3 journeys notified via Marketing Agent MCP</td></tr></table><div class="money-line">That was 14 people and 3 weeks of work. You just watched it happen in one conversation.</div></div>`);
+
+  addTyping(); await sleep(800); removeTyping();
+  addRawHTML(`<div class="agent-badge">EDS Importer</div><div class="message-content"><strong>EDS Pipeline Active</strong><br><br>The generated .docx has been saved to the connected SharePoint folder. The EDS importer pipeline will auto-convert it to a live page:<br><br><div class="issue-list"><div class="issue-item fixable">✓ .docx saved to SharePoint → <code>/campaigns/mediterranean-summer</code></div><div class="issue-item fixable">✓ AEM Code Sync detected new content</div><div class="issue-item fixable">✓ Importer converted to EDS blocks: Hero, Cards, Table, CTA</div><div class="issue-item fixable">✓ Preview available at <code>.aem.page</code></div></div><div style="margin-top:8px;font-size:10px;color:var(--text-muted)">Author in Word → Save to connected folder → Auto-publish to EDS. No developer needed.</div></div>`);
+
   updateGovernanceBar(96, { brand: true, legal: true, a11y: true, seo: 'warn' });
 }
 
