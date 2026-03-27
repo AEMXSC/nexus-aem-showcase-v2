@@ -4,7 +4,7 @@
  */
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-opus-4-0-20250115';
+const MODEL = 'claude-sonnet-4-20250514';
 const STORAGE_KEY = 'ew-claude-key';
 
 export function getApiKey() {
