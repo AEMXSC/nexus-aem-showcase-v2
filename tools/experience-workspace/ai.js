@@ -4,7 +4,7 @@
  */
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-20250514';
+const MODEL = 'claude-opus-4-0-20250115';
 const STORAGE_KEY = 'ew-claude-key';
 
 export function getApiKey() {
@@ -106,7 +106,7 @@ You are working with the ${o.name} AEM environment. Reference this org context w
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 2048,
+      max_tokens: 8192,
       system: systemParts.join('\n'),
       messages,
     }),
@@ -220,7 +220,7 @@ You are working with the ${o.name} AEM environment. Reference this org context w
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 2048,
+      max_tokens: 8192,
       stream: true,
       system: systemParts.join('\n'),
       messages,

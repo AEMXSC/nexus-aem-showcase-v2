@@ -228,13 +228,12 @@ async function handleRealChat(text) {
   const streamEl = addStreamMessage('Experience Agent');
 
   try {
-    await ai.streamChat(conversationHistory, ctx, (chunk, full) => {
+    const rawResponse = await ai.streamChat(conversationHistory, ctx, (chunk, full) => {
       streamEl.innerHTML = md(full);
       scrollChat();
     });
 
-    const finalText = streamEl.textContent;
-    conversationHistory.push({ role: 'assistant', content: finalText });
+    conversationHistory.push({ role: 'assistant', content: rawResponse });
   } catch (err) {
     streamEl.innerHTML = `<span style="color:var(--accent)">AI Error: ${err.message}</span><br>Check your API key in settings.`;
   }
@@ -745,43 +744,47 @@ const FLOWS = {
 };
 
 /* ── User Input ── */
+function matchSpecializedFlow(text) {
+  const lower = text.toLowerCase();
+  if (lower.includes('brief') || lower.includes('upload') || lower.includes('create page')) return runBrief;
+  if (lower.includes('governance') || lower.includes('compliance') || lower.includes('scan all')
+      || lower.includes('scan page') || lower.includes('run scan')) return runGovernance;
+  if (lower.includes('perform') || lower.includes('analytics') || lower.includes('bounce')) return runPerformanceFlow;
+  if (lower.includes('personal') || lower.includes('segment') || lower.includes('variant')) return runPersonalizeFlow;
+  if (lower.includes('workfront') || lower.includes('project health') || lower.includes('project status')) return runWorkfrontPanel;
+  if (lower.includes('review asset') || lower.includes('brand review') || lower.includes('brand check')) return runAIReviewer;
+  if (lower.includes('overdue') || lower.includes('pending approval') || lower.includes('capacity') || lower.includes('workload')) {
+    return () => runWorkfrontQuery(text);
+  }
+  return null;
+}
+
 function handleUserInput() {
   const text = chatInput.value.trim();
   if (!text) return;
   chatInput.value = '';
-  addMessage('user', text);
 
+  // Always check for specialized flows first — even in AI mode
+  const specializedFlow = matchSpecializedFlow(text);
+  if (specializedFlow) {
+    addMessage('user', text);
+    setTimeout(() => specializedFlow(), 400);
+    return;
+  }
+
+  // AI chat (with conversation history)
   if (ai.hasApiKey()) {
+    addMessage('user', text);
     handleRealChat(text);
     return;
   }
 
-  // Fallback: keyword routing to demo flows
-  const lower = text.toLowerCase();
-  if (lower.includes('brief') || lower.includes('upload') || lower.includes('create page')) {
-    setTimeout(() => runBrief(), 400);
-  } else if (lower.includes('governance') || lower.includes('compliance') || lower.includes('scan')) {
-    setTimeout(() => runGovernance(), 400);
-  } else if (lower.includes('perform') || lower.includes('analytics') || lower.includes('bounce')) {
-    setTimeout(() => runPerformanceFlow(), 400);
-  } else if (lower.includes('personal') || lower.includes('segment') || lower.includes('variant')) {
-    setTimeout(() => runPersonalizeFlow(), 400);
-  } else if (lower.includes('workfront') || lower.includes('project health') || lower.includes('project status')) {
-    setTimeout(() => runWorkfrontPanel(), 400);
-  } else if (lower.includes('review asset') || lower.includes('brand review') || lower.includes('brand check')) {
-    setTimeout(() => runAIReviewer(), 400);
-  } else if (lower.includes('overdue') || lower.includes('pending approval') || lower.includes('capacity') || lower.includes('workload')) {
-    setTimeout(() => {
-      addMessage('user', text);
-      runWorkfrontQuery(text);
-    }, 400);
-    return; // already added user message
-  } else {
-    setTimeout(async () => {
-      addTyping(); await sleep(1000); removeTyping();
-      addMessage('assistant', md('Configure your Claude API key in ⚙ settings to enable real AI chat.\n\nOr try the demo flows:\n• **Upload Brief** — campaign → compliant page\n• **Governance** — scan all pages\n• **Performance** — analytics insights\n• **Personalize** — audience targeting'));
-    }, 300);
-  }
+  // No API key and no matching flow — show instructions
+  addMessage('user', text);
+  setTimeout(async () => {
+    addTyping(); await sleep(1000); removeTyping();
+    addMessage('assistant', md('Configure your Claude API key in ⚙ settings to enable real AI chat.\n\nOr try the demo flows:\n• **Upload Brief** — campaign → compliant page\n• **Governance** — scan all pages\n• **Performance** — analytics insights\n• **Personalize** — audience targeting'));
+  }, 300);
 }
 
 /* ── Event Listeners ── */
