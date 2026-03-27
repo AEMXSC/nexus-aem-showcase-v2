@@ -212,6 +212,194 @@ async function ensurePageContext() {
   cachedPageHTML = await fetchPageHTML(currentUrl);
 }
 
+/* ── Tool Result Renderers ── */
+/* Declarative registry: maps tool names to UI renderer functions.
+   Each renderer receives (parsedResult, profile) and returns HTML string or null. */
+const TOOL_RENDERERS = {
+
+  /* ─ Discovery Agent: Asset Grid with Thumbnails ─ */
+  search_dam_assets(result) {
+    const assets = result.assets;
+    if (!assets?.length) return null;
+    const query = result.query || 'assets';
+    const total = result.total_results || assets.length;
+    const cards = assets.map((a) => {
+      const thumbUrl = a.delivery_url || a.dynamic_media_url || '';
+      const thumbSrc = thumbUrl ? thumbUrl.replace(/width=\d+/, 'width=400').replace(/quality=\d+/, 'quality=75') : '';
+      const name = a.title || a.name || 'Asset';
+      const dims = a.dimensions ? `${a.dimensions.width} × ${a.dimensions.height}` : '';
+      const date = a.last_modified || a.metadata?.upload_date || '';
+      const tags = (a.tags || []).slice(0, 3).map((t) => `<span class="asset-tag">${t}</span>`).join('');
+      const statusClass = a.status === 'approved' ? 'approved' : 'review';
+      return `
+        <a href="${thumbUrl}" target="_blank" rel="noopener" class="asset-card">
+          <div class="asset-thumb" style="background-image:url('${thumbSrc}')">
+            <span class="asset-status ${statusClass}">${a.status || 'approved'}</span>
+          </div>
+          <div class="asset-info">
+            <div class="asset-name">${name}</div>
+            <div class="asset-meta">${dims}${date ? ` · ${date}` : ''}</div>
+            ${tags ? `<div class="asset-tags">${tags}</div>` : ''}
+          </div>
+        </a>`;
+    }).join('');
+    return `
+      <div class="result-card asset-grid-card">
+        <div class="result-card-header">
+          <span class="result-card-icon">🖼️</span>
+          <span class="result-card-title">${total} assets found for "${query}"</span>
+        </div>
+        <div class="asset-grid">${cards}</div>
+      </div>`;
+  },
+
+  /* ─ Content Optimization Agent: Firefly Variations ─ */
+  generate_image_variations(result) {
+    const variations = result.variations;
+    if (!variations?.length) return null;
+    const cards = variations.map((v, i) => {
+      const thumbUrl = v.thumbnail_url || v.delivery_url || '';
+      const score = v.confidence_score ? `${Math.round(v.confidence_score * 100)}%` : '';
+      return `
+        <a href="${v.delivery_url || '#'}" target="_blank" rel="noopener" class="asset-card firefly-card">
+          <div class="asset-thumb firefly-thumb" style="background-image:url('${thumbUrl}')">
+            <span class="asset-status firefly">Firefly</span>
+            ${score ? `<span class="firefly-score">${score}</span>` : ''}
+          </div>
+          <div class="asset-info">
+            <div class="asset-name">Variation ${i + 1}</div>
+            <div class="asset-meta">${v.style_preset || ''} · ${v.aspect_ratio || 'original'}</div>
+          </div>
+        </a>`;
+    }).join('');
+    return `
+      <div class="result-card asset-grid-card">
+        <div class="result-card-header">
+          <span class="result-card-icon">✨</span>
+          <span class="result-card-title">${variations.length} Firefly variations generated</span>
+        </div>
+        <div class="asset-grid">${cards}</div>
+        <div class="result-card-footer">Prompt: "${(result.prompt || '').slice(0, 80)}" · ${result.credits_used || 0} credit(s) used</div>
+      </div>`;
+  },
+
+  /* ─ Governance Agent: Visual Scorecard ─ */
+  run_governance_check(result) {
+    const checks = result.checks;
+    if (!checks) return null;
+    const score = result.overall_score || 0;
+    const status = result.overall_status || 'unknown';
+    const statusColor = status === 'approved' ? 'var(--green)' : status === 'blocked' ? 'var(--red)' : 'var(--yellow)';
+    const statusLabel = status === 'approved' ? 'Approved' : status === 'blocked' ? 'Blocked' : 'Warnings';
+
+    const checkRows = Object.entries(checks).map(([name, data]) => {
+      const icon = data.status === 'pass' ? '✓' : data.status === 'warn' ? '!' : data.status === 'fail' ? '✗' : '?';
+      const cls = data.status === 'pass' ? 'pass' : data.status === 'warn' ? 'warn' : data.status === 'fail' ? 'fail' : 'review';
+      return `
+        <div class="gov-check-row">
+          <span class="gov-check-icon ${cls}">${icon}</span>
+          <span class="gov-check-name">${name}</span>
+          <span class="gov-check-score">${data.score}/100</span>
+          <div class="gov-check-bar"><div class="gov-check-fill ${cls}" style="width:${data.score}%"></div></div>
+        </div>`;
+    }).join('');
+
+    const findingsHtml = (result.findings || []).filter((f) => f.severity !== 'pass' && f.severity !== 'info').slice(0, 5).map((f) => {
+      const cls = f.severity === 'warn' ? 'warn' : f.severity === 'review' ? 'review' : 'fail';
+      return `<div class="gov-finding ${cls}"><span class="gov-finding-dot"></span>${f.message}</div>`;
+    }).join('');
+
+    return `
+      <div class="result-card gov-card">
+        <div class="result-card-header">
+          <span class="result-card-icon">🛡️</span>
+          <span class="result-card-title">Governance Check — ${result.page_path || 'Page'}</span>
+        </div>
+        <div class="gov-score-ring">
+          <svg viewBox="0 0 100 100" class="gov-ring-svg">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" stroke-width="6"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="${statusColor}" stroke-width="6"
+              stroke-dasharray="${score * 2.64} ${264 - score * 2.64}" stroke-linecap="round"
+              transform="rotate(-90 50 50)"/>
+          </svg>
+          <div class="gov-score-value">${score}</div>
+          <div class="gov-score-label" style="color:${statusColor}">${statusLabel}</div>
+        </div>
+        <div class="gov-checks">${checkRows}</div>
+        ${findingsHtml ? `<div class="gov-findings">${findingsHtml}</div>` : ''}
+      </div>`;
+  },
+
+  /* ─ Development Agent: Pipeline Status Badges ─ */
+  get_pipeline_status(result) {
+    const pipelines = result.pipelines;
+    if (!pipelines?.length) return null;
+    const health = result.environment_health;
+
+    const pipeRows = pipelines.map((p) => {
+      const statusCls = p.status === 'completed' ? 'pass' : p.status === 'running' ? 'running' : p.status === 'failed' ? 'fail' : 'pending';
+      const statusIcon = p.status === 'completed' ? '✓' : p.status === 'running' ? '◎' : p.status === 'failed' ? '✗' : '○';
+      const dur = p.duration_min ? `${p.duration_min}m` : '—';
+      const ago = p.last_run ? timeAgo(p.last_run) : '';
+      return `
+        <div class="pipe-row ${statusCls}">
+          <span class="pipe-status-icon">${statusIcon}</span>
+          <div class="pipe-info">
+            <div class="pipe-name">${p.name}</div>
+            <div class="pipe-meta">${p.type} · ${p.environment} · ${p.trigger || ''}${ago ? ` · ${ago}` : ''}</div>
+            ${p.failure_reason ? `<div class="pipe-error">${p.failure_reason}</div>` : ''}
+          </div>
+          <div class="pipe-stats">
+            <span class="pipe-duration">${dur}</span>
+            <span class="pipe-badge ${statusCls}">${p.status}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    const healthCls = health?.status === 'healthy' ? 'pass' : 'warn';
+    return `
+      <div class="result-card pipe-card">
+        <div class="result-card-header">
+          <span class="result-card-icon">🚀</span>
+          <span class="result-card-title">Pipeline Status — ${result.program || 'AEM Program'}</span>
+          ${health ? `<span class="pipe-health ${healthCls}">${health.status} · ${health.uptime} uptime</span>` : ''}
+        </div>
+        <div class="pipe-list">${pipeRows}</div>
+      </div>`;
+  },
+
+  /* ─ AEM Content Agent: Page Created Card ─ */
+  copy_aem_page(result, profile) {
+    if (result.status !== 'created') return null;
+    const title = result.title || result.path?.replace(/^\//, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'New Page';
+    const siteName = profile?.name || 'AEM Site';
+    const ueUrl = result.edit_urls?.universal_editor;
+    const daUrl = result.edit_urls?.document_authoring;
+    const profileName = profile?.contactName || 'Author';
+    return `
+      <div class="page-card">
+        <div class="page-card-header">
+          <div class="page-card-icon">📄</div>
+          <div class="page-card-meta">
+            <div class="page-card-title">${title} — Live on ${siteName}</div>
+            <div class="page-card-author">Created by: ${profileName} — just now</div>
+          </div>
+        </div>
+        ${ueUrl ? `<a href="${ueUrl}" target="_blank" rel="noopener" class="page-card-link">Open in Universal Editor →</a>` : ''}
+        ${daUrl ? `<a href="${daUrl}" target="_blank" rel="noopener" class="page-card-link page-card-link-secondary">Open in Document Authoring →</a>` : ''}
+      </div>`;
+  },
+};
+
+/* Helper: relative time ago */
+function timeAgo(isoStr) {
+  const ms = Date.now() - new Date(isoStr).getTime();
+  if (ms < 60000) return 'just now';
+  if (ms < 3600000) return `${Math.floor(ms / 60000)}m ago`;
+  if (ms < 86400000) return `${Math.floor(ms / 3600000)}h ago`;
+  return `${Math.floor(ms / 86400000)}d ago`;
+}
+
 /* ── REAL: AI Chat (with native tool use) ── */
 async function handleRealChat(text, file) {
   // Build message content — with file attachment if present
@@ -291,35 +479,15 @@ async function handleRealChat(text, file) {
       stepEl.querySelector('.tool-call-status').textContent = 'Result';
     }
 
-    // Render a page-created summary card (like Claude.ai AEM Content MCP)
-    // Only show for copy_aem_page (page creation) — not for every patch
-    if (toolName === 'copy_aem_page') {
+    // ── Tool Result Renderer Dispatch ──
+    // Declarative system: auto-renders structured tool results as rich UI
+    const renderer = TOOL_RENDERERS[toolName];
+    if (renderer) {
       try {
         const result = JSON.parse(resultStr);
-        if (result.status === 'created') {
-          const title = result.title || result.path?.replace(/^\//, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'New Page';
-          const siteName = getActiveProfile()?.name || 'AEM Site';
-          const ueUrl = result.edit_urls?.universal_editor;
-          const daUrl = result.edit_urls?.document_authoring;
-          const action = result.status === 'created' ? 'Created' : 'Updated';
-          const profileName = getActiveProfile()?.contactName || 'Author';
-
-          addRawHTML(`
-            <div class="page-card">
-              <div class="page-card-header">
-                <div class="page-card-icon">📄</div>
-                <div class="page-card-meta">
-                  <div class="page-card-title">${title} — Live on ${siteName}</div>
-                  <div class="page-card-author">${action} by: ${profileName} — just now</div>
-                </div>
-              </div>
-              ${ueUrl ? `<a href="${ueUrl}" target="_blank" rel="noopener" class="page-card-link">Open in Universal Editor →</a>` : ''}
-              ${daUrl ? `<a href="${daUrl}" target="_blank" rel="noopener" class="page-card-link page-card-link-secondary">Open in Document Authoring →</a>` : ''}
-            </div>
-          `);
-          scrollChat();
-        }
-      } catch { /* not JSON, skip */ }
+        const html = renderer(result, getActiveProfile());
+        if (html) { addRawHTML(html); scrollChat(); }
+      } catch { /* not parseable JSON — skip rich render */ }
     }
 
     // Check if all calls in this agent group are done — update the header dot

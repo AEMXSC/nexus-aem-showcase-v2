@@ -1332,8 +1332,8 @@ async function executeTool(name, input) {
         if (env !== 'all') filtered = filtered.filter((p) => p.environment === env);
       }
 
-      // Filter by status
-      if (statusFilter) {
+      // Filter by status (skip if "all" or empty)
+      if (statusFilter && statusFilter !== 'all') {
         filtered = filtered.filter((p) => p.status === statusFilter);
       }
 

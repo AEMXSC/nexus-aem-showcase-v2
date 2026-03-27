@@ -1656,4 +1656,433 @@ html, body {
   .input-area {
     padding: 10px 12px 14px;
   }
+
+  .asset-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
 }
+
+/* ─── Tool Result Cards (shared) ─── */
+.result-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  animation: fadeIn 0.3s ease;
+  margin: 8px 0;
+}
+
+.result-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 80%, var(--accent-dim));
+}
+
+.result-card-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.result-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.result-card-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ─── Asset Grid (Discovery Agent / Firefly) ─── */
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+}
+
+.asset-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.2s, transform 0.15s;
+  cursor: pointer;
+}
+
+.asset-card:hover {
+  background: var(--bg-card-hover);
+  transform: scale(1.02);
+  z-index: 1;
+}
+
+.asset-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background-size: cover;
+  background-position: center;
+  background-color: color-mix(in srgb, var(--accent-dim) 30%, var(--bg-secondary));
+  position: relative;
+  overflow: hidden;
+}
+
+/* Placeholder pattern for simulated thumbnails */
+.asset-thumb::before {
+  content: '🖼';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  opacity: 0.3;
+  z-index: 0;
+}
+
+.asset-thumb[style*="background-image"]::before {
+  display: none;
+}
+
+.asset-status {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  z-index: 1;
+}
+
+.asset-status.approved {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.asset-status.review {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+}
+
+.asset-status.firefly {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  color: #fff;
+}
+
+.firefly-score {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  z-index: 1;
+}
+
+.firefly-thumb {
+  background-color: color-mix(in srgb, #6366f1 15%, var(--bg-secondary));
+}
+
+.firefly-thumb::before {
+  content: '✨';
+}
+
+.asset-info {
+  padding: 8px 10px;
+  min-height: 48px;
+}
+
+.asset-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.asset-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.asset-tags {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.asset-tag {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  background: var(--accent-dim);
+  color: var(--accent-light);
+  font-weight: 500;
+}
+
+/* ─── Governance Scorecard ─── */
+.gov-card {
+  text-align: center;
+}
+
+.gov-score-ring {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 16px auto 8px;
+}
+
+.gov-ring-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.gov-score-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -60%);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.gov-score-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.gov-checks {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gov-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gov-check-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.gov-check-icon.pass { background: var(--green-dim); color: var(--green); }
+.gov-check-icon.warn { background: var(--yellow-dim); color: var(--yellow); }
+.gov-check-icon.fail { background: var(--red-dim); color: var(--red); }
+.gov-check-icon.review { background: var(--accent-dim); color: var(--accent-light); }
+
+.gov-check-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+  min-width: 90px;
+  text-align: left;
+}
+
+.gov-check-score {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 50px;
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+.gov-check-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.gov-check-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+.gov-check-fill.pass { background: var(--green); }
+.gov-check-fill.warn { background: var(--yellow); }
+.gov-check-fill.fail { background: var(--red); }
+.gov-check-fill.review { background: var(--accent); }
+
+.gov-findings {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.gov-finding {
+  font-size: 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.gov-finding.warn { color: var(--yellow); }
+.gov-finding.review { color: var(--accent-light); }
+.gov-finding.fail { color: var(--red); }
+
+.gov-finding-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* ─── Pipeline Status ─── */
+.pipe-card .result-card-header {
+  justify-content: flex-start;
+}
+
+.pipe-health {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+}
+
+.pipe-health.pass {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.pipe-health.warn {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+}
+
+.pipe-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pipe-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  transition: background 0.15s;
+}
+
+.pipe-row:last-child {
+  border-bottom: none;
+}
+
+.pipe-row:hover {
+  background: var(--bg-card-hover);
+}
+
+.pipe-status-icon {
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.pipe-row.pass .pipe-status-icon { color: var(--green); background: var(--green-dim); }
+.pipe-row.running .pipe-status-icon { color: var(--accent); background: var(--accent-dim); animation: pulse 1.5s infinite; }
+.pipe-row.fail .pipe-status-icon { color: var(--red); background: var(--red-dim); }
+.pipe-row.pending .pipe-status-icon { color: var(--text-muted); background: var(--border); }
+
+.pipe-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pipe-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pipe-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.pipe-error {
+  font-size: 10px;
+  color: var(--red);
+  margin-top: 3px;
+  font-family: var(--font-mono);
+}
+
+.pipe-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pipe-duration {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.pipe-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pipe-badge.pass { background: var(--green-dim); color: var(--green); }
+.pipe-badge.running { background: var(--accent-dim); color: var(--accent); }
+.pipe-badge.fail { background: var(--red-dim); color: var(--red); }
+.pipe-badge.pending { background: var(--border); color: var(--text-muted); }
