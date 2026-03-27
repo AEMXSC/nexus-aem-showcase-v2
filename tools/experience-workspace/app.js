@@ -391,6 +391,90 @@ const TOOL_RENDERERS = {
   },
 };
 
+/* ── Contextual Suggestion Engine ── */
+/* Maps tool names to smart follow-up action chips.
+   After AI completes, we look at which tools were called and surface
+   the most relevant next steps as clickable chips (like AI Assistant). */
+const TOOL_SUGGESTIONS = {
+  search_dam_assets: [
+    { icon: '📄', label: 'Use in a new page', prompt: 'Create a new page using the best assets from those results' },
+    { icon: '✨', label: 'Generate variations', prompt: 'Generate Firefly variations of the top asset' },
+    { icon: '🛡️', label: 'Check asset rights', prompt: 'Run a DRM and rights check on these assets' },
+  ],
+  copy_aem_page: [
+    { icon: '✏️', label: 'Edit the content', prompt: 'Update the hero headline and body copy on the new page' },
+    { icon: '🛡️', label: 'Run governance check', prompt: 'Run a full governance check on the new page' },
+    { icon: '🚀', label: 'Create a Launch', prompt: 'Create a Launch for this page for review and approval' },
+  ],
+  patch_aem_page_content: [
+    { icon: '👁️', label: 'Preview the page', prompt: 'Show me the current page content after the changes' },
+    { icon: '🛡️', label: 'Run governance check', prompt: 'Run governance checks on the updated page' },
+    { icon: '📋', label: 'Create review task', prompt: 'Create a Workfront task to review the content changes' },
+  ],
+  run_governance_check: [
+    { icon: '🔧', label: 'Fix the issues', prompt: 'Fix the accessibility and governance issues found' },
+    { icon: '🚀', label: 'Promote to production', prompt: 'Create a Launch and promote this page to production' },
+    { icon: '📋', label: 'Assign to reviewer', prompt: 'Create a Workfront task for the approval chain to review' },
+  ],
+  get_pipeline_status: [
+    { icon: '🔍', label: 'Analyze failure', prompt: 'Analyze the failed pipeline and suggest a fix' },
+    { icon: '📊', label: 'View deployment history', prompt: 'Show me the full deployment history for production' },
+    { icon: '🔔', label: 'Create alert task', prompt: 'Create a Workfront task for the pipeline failure' },
+  ],
+  generate_image_variations: [
+    { icon: '📄', label: 'Apply to page', prompt: 'Apply the best Firefly variation to the hero section' },
+    { icon: '✨', label: 'Generate more', prompt: 'Generate 4 more variations with different styles' },
+    { icon: '🛡️', label: 'Brand compliance check', prompt: 'Check if these generated images match our brand guidelines' },
+  ],
+  get_audience_segments: [
+    { icon: '👥', label: 'Create variant', prompt: 'Create a personalized content variant for the top segment' },
+    { icon: '🎯', label: 'Setup A/B test', prompt: 'Create an A/B test targeting these audience segments' },
+    { icon: '📊', label: 'View analytics', prompt: 'Show me analytics insights for these segments' },
+  ],
+  create_ab_test: [
+    { icon: '📊', label: 'View test results', prompt: 'Show me the current A/B test performance metrics' },
+    { icon: '🎯', label: 'Adjust targeting', prompt: 'Refine the targeting rules for this test' },
+    { icon: '🏆', label: 'Pick winner', prompt: 'Analyze results and recommend the winning variant' },
+  ],
+  get_analytics_insights: [
+    { icon: '📄', label: 'Optimize content', prompt: 'Suggest content optimizations based on these analytics' },
+    { icon: '👥', label: 'Create segments', prompt: 'Create audience segments from the high-performing traffic' },
+    { icon: '🎯', label: 'Setup personalization', prompt: 'Setup personalization rules based on these insights' },
+  ],
+  translate_page: [
+    { icon: '🛡️', label: 'Review translation', prompt: 'Run governance and brand checks on the translated page' },
+    { icon: '🌐', label: 'Translate more', prompt: 'Translate the same page into additional languages' },
+    { icon: '📋', label: 'Create review task', prompt: 'Create a Workfront task for native speaker review' },
+  ],
+  extract_pdf_content: [
+    { icon: '📄', label: 'Generate the page', prompt: 'Create an AEM page from the extracted brief content' },
+    { icon: '🖼️', label: 'Find matching assets', prompt: 'Search DAM for images that match the brief themes' },
+    { icon: '📋', label: 'Create project tasks', prompt: 'Break down the brief into Workfront tasks' },
+  ],
+  create_workfront_task: [
+    { icon: '📋', label: 'View project status', prompt: 'Show me the current Workfront project health and timeline' },
+    { icon: '👤', label: 'Check team capacity', prompt: 'Check team workload and capacity for this sprint' },
+    { icon: '📊', label: 'View all tasks', prompt: 'Show all open tasks and their current status' },
+  ],
+};
+
+function getContextualSuggestions(toolsCalledSet) {
+  const seen = new Set();
+  const suggestions = [];
+  // Prioritize: take suggestions from each tool called, avoid duplicates
+  for (const tool of toolsCalledSet) {
+    const candidates = TOOL_SUGGESTIONS[tool];
+    if (!candidates) continue;
+    for (const s of candidates) {
+      if (!seen.has(s.label) && suggestions.length < 3) {
+        seen.add(s.label);
+        suggestions.push(s);
+      }
+    }
+  }
+  return suggestions;
+}
+
 /* Helper: relative time ago */
 function timeAgo(isoStr) {
   const ms = Date.now() - new Date(isoStr).getTime();
@@ -429,9 +513,11 @@ async function handleRealChat(text, file) {
   // Track which agent badges have been shown
   const shownAgents = new Set();
   const agentContainers = {};
+  const toolsCalled = new Set(); // Track tools called this turn for suggestions
 
   function onToolCall(toolName, toolInput) {
     toolCount++;
+    toolsCalled.add(toolName);
     const agentName = TOOL_AGENT_MAP[toolName] || 'Adobe Agent';
 
     // Create a new collapsible container per agent
@@ -519,6 +605,31 @@ async function handleRealChat(text, file) {
     );
 
     conversationHistory.push({ role: 'assistant', content: rawResponse });
+
+    // ── Contextual Suggestion Chips ──
+    // Show smart follow-up actions based on which tools were called
+    if (toolsCalled.size > 0) {
+      const suggestions = getContextualSuggestions(toolsCalled);
+      if (suggestions.length > 0) {
+        const chips = suggestions.map((s) => `<button class="suggestion-chip" data-prompt="${s.prompt.replace(/"/g, '&quot;')}">${s.icon} ${s.label}</button>`).join('');
+        const chipBar = addRawHTML(`
+          <div class="suggestion-bar">
+            <span class="suggestion-label">Related</span>
+            ${chips}
+          </div>
+        `);
+        // Wire click handlers
+        chipBar.querySelectorAll('.suggestion-chip').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const prompt = btn.dataset.prompt;
+            chatInput.value = prompt;
+            chipBar.remove(); // Remove chips once one is clicked
+            handleUserInput();
+          });
+        });
+        scrollChat();
+      }
+    }
   } catch (err) {
     streamEl.innerHTML = `<span style="color:var(--accent)">AI Error: ${err.message}</span><br>Check your API key in settings.`;
   }
