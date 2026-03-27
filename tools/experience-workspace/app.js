@@ -8,7 +8,7 @@ import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './im
 import * as ai from './ai.js';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
-import * as wf from './workfront.js';
+// workfront.js no longer used — all WOA flows use real AI via handleRealChat
 
 /* ── AEM Org Configuration ── */
 const AEM_ORG = {
@@ -372,23 +372,6 @@ async function runRealGovernance() {
       `);
     }
 
-    // Workfront AI Reviewer — brand compliance check on page assets
-    addTyping();
-    await sleep(600);
-    removeTyping();
-
-    const heroImg = scanDoc?.querySelector('img');
-    const assetName = heroImg?.src?.split('/').pop() || heroImg?.alt || 'page-hero-asset';
-    const review = await wf.reviewAsset({ name: assetName, type: 'page-asset' });
-    let reviewHTML = `<strong>Brand Asset Review: ${review.asset}</strong>`;
-    reviewHTML += `<div style="margin:6px 0"><span style="font-weight:600;color:${review.brandScore >= 90 ? 'var(--green)' : 'var(--yellow)'}">${review.brandScore}%</span> brand-compliant</div>`;
-    reviewHTML += '<div class="issue-list">';
-    review.checks.forEach((c) => {
-      const icon = c.status === 'pass' ? '✓' : c.status === 'warn' ? '⚠' : '❌';
-      reviewHTML += `<div class="issue-item ${c.status === 'pass' ? 'fixable' : 'needs-review'}">${icon} ${c.rule}: ${c.detail}</div>`;
-    });
-    reviewHTML += '</div>';
-    addRawHTML(`<div class="agent-badge">WF AI Reviewer</div><div class="message-content">${reviewHTML}</div>`);
   }
 }
 
@@ -524,79 +507,41 @@ async function extractPdfText(file) {
 
 /* ── (Demo flows removed — all flows are real AI now) ── */
 
-/* ── Workfront WOA Flows ── */
+/* ── Workfront WOA Flows — Real AI ── */
 async function runWorkfrontPanel() {
-  addMessage('user', 'Show Workfront project status and agent capabilities');
+  addMessage('user', 'Show Workfront project status and WOA agent capabilities');
+  await handleRealChat(`Show the current Workfront WOA (Workflow Optimization Agent) status for the AEM XSC Showcase project. Include:
 
-  // Show connected agents
-  const agents = wf.getAgentStatus();
-  let agentHTML = '<strong>Workfront Optimization Agents</strong>';
-  agentHTML += '<table class="gov-results" style="margin-top:10px"><tr><th>Agent</th><th>Status</th><th>GA</th></tr>';
-  agents.forEach((a) => {
-    const statusLabel = a.status === 'open-beta' ? '<span style="color:var(--yellow)">Open Beta</span>'
-      : a.status === 'ga-planned' ? '<span style="color:var(--green)">GA Planned</span>'
-        : '<span style="color:var(--text-muted)">TBD</span>';
-    agentHTML += `<tr><td>${a.icon} ${a.name}</td><td>${statusLabel}</td><td>${a.ga}</td></tr>`;
-  });
-  agentHTML += '</table>';
+1. **Connected WOA Agents** — list the four P1 skills with their current status:
+   - AI Reviewer (brand guideline compliance for assets) — Open Beta, GA Q1 FY26
+   - AI Form Fill (AI-powered form completion) — Open Beta, GA 12/3/25
+   - Project Health (AI project/program performance assessment) — Open Beta, GA TBD
+   - Intelligent Answers (NL questions across Workfront ecosystem) — GA Planned, 12/3/25
 
-  addRawHTML(`<div class="agent-badge">Workfront WOA</div><div class="message-content">${agentHTML}</div>`);
+2. **Project Health Assessment** — provide an AI-driven assessment of the AEM XSC Showcase Launch project covering schedule, risks, blockers, and team capacity.
 
-  // Project Health
-  addTyping();
-  await sleep(800);
-  removeTyping();
+3. **Actionable Recommendations** — what should the team focus on next?
 
-  const health = await wf.getProjectHealth();
-  const healthColor = health.healthScore >= 85 ? 'var(--green)' : health.healthScore >= 70 ? 'var(--yellow)' : 'var(--accent)';
-
-  let healthHTML = `<strong>${health.projectName}</strong>`;
-  healthHTML += `<div style="margin:8px 0"><span style="font-size:24px;font-weight:700;color:${healthColor}">${health.healthScore}</span><span style="color:var(--text-muted);margin-left:4px">/ 100 health score</span></div>`;
-  healthHTML += `<div style="margin-bottom:8px">Status: <strong style="color:${health.status === 'at-risk' ? 'var(--yellow)' : 'var(--green)'}">${health.status.toUpperCase()}</strong> · Timeline: ${health.timeline.projected} (${health.timeline.variance})</div>`;
-  healthHTML += '<div class="issue-list">';
-  health.insights.forEach((i) => {
-    const icon = i.type === 'risk' ? '⚠' : i.type === 'positive' ? '✓' : '💡';
-    const cls = i.type === 'risk' ? 'needs-review' : i.type === 'positive' ? 'fixable' : '';
-    healthHTML += `<div class="issue-item ${cls}">${icon} ${i.message}</div>`;
-  });
-  healthHTML += '</div>';
-  healthHTML += `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Tasks: ${health.tasks.completed}/${health.tasks.total} complete · ${health.tasks.inProgress} in progress · ${health.tasks.blocked} blocked</div>`;
-
-  addRawHTML(`<div class="agent-badge">Project Health</div><div class="message-content">${healthHTML}</div>`);
+Format with tables and structured data. Use ✓/⚠/❌ indicators for status.`);
 }
 
-async function runAIReviewer(assetInfo) {
-  const asset = assetInfo || { name: 'hero-campaign-banner.png', type: 'image', url: '' };
-  addMessage('user', `Review asset: ${asset.name}`);
+async function runAIReviewer() {
+  addMessage('user', 'Run Workfront AI Reviewer — brand compliance check');
+  await handleRealChat(`As the Workfront AI Reviewer agent, perform a brand compliance review on the current page assets. Check:
+- Logo placement and usage
+- Color palette adherence to brand guidelines
+- Typography (Adobe Clean font usage)
+- Image quality and resolution
+- Tone of voice alignment
 
-  addTyping();
-  await sleep(1200);
-  removeTyping();
-
-  const review = await wf.reviewAsset(asset);
-  let html = `<strong>Brand Compliance Review: ${review.asset}</strong>`;
-  html += `<div style="margin:8px 0"><span style="font-size:20px;font-weight:700;color:${review.brandScore >= 90 ? 'var(--green)' : 'var(--yellow)'}">${review.brandScore}%</span> brand-compliant</div>`;
-  html += '<div class="issue-list">';
-  review.checks.forEach((c) => {
-    const icon = c.status === 'pass' ? '✓' : c.status === 'warn' ? '⚠' : '❌';
-    const cls = c.status === 'pass' ? 'fixable' : c.status === 'warn' ? 'needs-review' : 'critical';
-    html += `<div class="issue-item ${cls}">${icon} <strong>${c.rule}</strong> — ${c.detail}</div>`;
-  });
-  html += '</div>';
-  html += `<div class="money-line">${review.recommendation}</div>`;
-
-  addRawHTML(`<div class="agent-badge">AI Reviewer</div><div class="message-content">${html}</div>`);
+Provide a brand compliance score and specific findings with pass/warn/fail status for each check.`);
 }
 
 async function runWorkfrontQuery(question) {
-  const q = question || 'What tasks are overdue this week?';
+  addMessage('user', question);
+  await handleRealChat(`As the Workfront Intelligent Answers agent, answer this question about the Workfront ecosystem: "${question}"
 
-  addTyping();
-  await sleep(1000);
-  removeTyping();
-
-  const result = await wf.askWorkfront(q);
-  addRawHTML(`<div class="agent-badge">Intelligent Answers</div><div class="message-content">${md(result.answer)}<div style="margin-top:8px;font-size:10px;color:var(--text-muted)">Sources: ${result.sources.join(', ')} · Confidence: ${Math.round(result.confidence * 100)}%</div></div>`);
+Provide a detailed answer referencing projects, tasks, approvals, timesheets, and team capacity as relevant. Format with markdown tables and structured data where appropriate.`);
 }
 
 /* ── (Demo governance fix/route removed — real AI handles all interactions) ── */
