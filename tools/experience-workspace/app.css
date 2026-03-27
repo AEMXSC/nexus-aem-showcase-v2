@@ -2,6 +2,53 @@
 
 @import url('https://use.typekit.net/mge7bvf.css'); /* Adobe Clean */
 
+/* ─── EDS Override: Prevent global EDS styles from breaking workspace layout ─── */
+body.appear {
+  display: grid !important;
+  grid-template-rows: none !important;
+  grid-template-columns: none !important;
+  min-height: auto !important;
+  overflow: hidden !important;
+}
+
+body {
+  display: block !important;
+}
+
+/* Kill EDS header/footer/main/section wrappers */
+body > header,
+body > footer {
+  display: none !important;
+}
+
+body > main {
+  display: contents !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+body > main > .section {
+  display: contents !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: none !important;
+}
+
+body > main > .section > div {
+  display: contents !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: none !important;
+}
+
+/* Reset any EDS wrapper constraints on our workspace */
+.experience-workspace-wrapper,
+.experience-workspace {
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
 *,
 *::before,
 *::after {
@@ -94,9 +141,16 @@ html, body {
 
 /* ─── Layout ─── */
 .workspace {
-  display: grid;
-  grid-template-columns: var(--icon-rail-width) 360px 1fr;
-  height: 100vh;
+  display: grid !important;
+  grid-template-columns: var(--icon-rail-width) 360px 1fr !important;
+  grid-template-rows: none !important;
+  height: 100vh !important;
+  width: 100% !important;
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  position: relative;
 }
 
 /* ─── Icon Rail (Activity Bar) ─── */
@@ -1117,17 +1171,17 @@ html, body {
 }
 
 /* ─── Responsive ─── */
-@media (width <= 1024px) {
+@media (max-width: 1024px) {
   .workspace {
-    grid-template-columns: var(--icon-rail-width) 1fr;
+    grid-template-columns: var(--icon-rail-width) 1fr !important;
   }
 
   .assistant-panel {
-    display: none;
+    display: none !important;
   }
 
   .assistant-panel.mobile-open {
-    display: flex;
+    display: flex !important;
     position: fixed;
     inset: 0;
     left: var(--icon-rail-width);
@@ -1136,16 +1190,16 @@ html, body {
   }
 }
 
-@media (width <= 768px) {
+@media (max-width: 768px) {
   .workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .icon-rail {
-    display: none;
+    display: none !important;
   }
 
   .assistant-panel {
-    display: none;
+    display: none !important;
   }
 }

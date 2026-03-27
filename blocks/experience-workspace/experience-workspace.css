@@ -2,27 +2,61 @@
 
 @import url('https://use.typekit.net/mge7bvf.css'); /* Adobe Clean */
 
-/* Hide AEM header/footer and reset page */
+/* ─── EDS Override: full-page takeover ─── */
+/* Kill AEM body.appear grid that overrides our workspace layout */
+body.experience-workspace-page.appear {
+  display: block !important;
+  grid-template-rows: none !important;
+  grid-template-columns: none !important;
+  min-height: auto !important;
+}
+
+body.experience-workspace-page {
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hide AEM header/footer and non-workspace sections */
 body.experience-workspace-page header,
 body.experience-workspace-page footer,
 body.experience-workspace-page .section:not(.experience-workspace-container) {
   display: none !important;
 }
 
-body.experience-workspace-page {
-  overflow: hidden !important;
-}
-
+/* Reset all AEM wrappers between body and our block */
 body.experience-workspace-page main {
+  display: block !important;
   padding: 0 !important;
   margin: 0 !important;
   max-width: none !important;
+  width: 100% !important;
 }
 
-body.experience-workspace-page main .section {
+body.experience-workspace-page main > .section,
+body.experience-workspace-page main > div {
+  display: block !important;
   padding: 0 !important;
   margin: 0 !important;
   max-width: none !important;
+  width: 100% !important;
+}
+
+body.experience-workspace-page main > .section > div {
+  display: block !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+
+/* Reset any EDS block padding on our wrapper */
+body.experience-workspace-page .experience-workspace-wrapper,
+body.experience-workspace-page .experience-workspace-container {
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
 }
 
 /* ─── Spectrum Dark Theme Variables ─── */
@@ -79,17 +113,22 @@ body.experience-workspace-page main .section {
 
 /* ─── Root Layout ─── */
 .experience-workspace {
-  display: grid;
-  grid-template-columns: var(--ew-icon-rail-width) 360px 1fr;
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
+  display: grid !important;
+  grid-template-columns: 360px 1fr !important;
+  grid-template-rows: 1fr !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
   font-family: var(--ew-font-sans);
   background: var(--ew-content-bg);
   color: var(--ew-text-primary);
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  overflow: hidden !important;
 }
 
 .experience-workspace *,
@@ -915,15 +954,16 @@ body.experience-workspace-page main .section {
 /* Responsive */
 @media (width <= 1024px) {
   .experience-workspace {
-    grid-template-columns: var(--ew-icon-rail-width) 1fr;
+    grid-template-columns: 1fr !important;
   }
+
   .ew-assistant { display: none; }
 }
 
 @media (width <= 768px) {
   .experience-workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
-  .ew-icon-rail { display: none; }
+
   .ew-assistant { display: none; }
 }
