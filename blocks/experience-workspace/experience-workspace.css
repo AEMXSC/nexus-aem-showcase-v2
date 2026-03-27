@@ -334,6 +334,62 @@ body.experience-workspace-page .experience-workspace-container {
 
 .ew-settings-panel.visible { display: block; }
 
+.ew-settings-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ew-text-secondary);
+  margin-bottom: 6px;
+}
+
+.ew-settings-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: var(--ew-font-mono);
+  background: var(--ew-gray-100);
+  border: 1px solid var(--ew-panel-border);
+  border-radius: var(--ew-radius-sm);
+  color: var(--ew-text-primary);
+  outline: none;
+}
+
+.ew-settings-input:focus {
+  border-color: var(--ew-accent);
+}
+
+.ew-settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ew-settings-save,
+.ew-settings-cancel {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--ew-radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ew-settings-save {
+  background: var(--ew-accent);
+  color: #fff;
+}
+
+.ew-settings-save:hover { background: var(--ew-accent-hover); }
+
+.ew-settings-cancel {
+  background: var(--ew-gray-300);
+  color: var(--ew-text-primary);
+}
+
+.ew-settings-cancel:hover { background: var(--ew-gray-400); }
+
 /* Customer context */
 .ew-customer {
   padding: 10px 16px;
@@ -928,7 +984,8 @@ body.experience-workspace-page .experience-workspace-container {
 }
 
 /* Streaming content */
-.ew-stream-content {
+.ew-stream-content,
+.ew-stream {
   white-space: pre-wrap;
   word-break: break-word;
 }
