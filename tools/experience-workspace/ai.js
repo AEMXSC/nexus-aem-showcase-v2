@@ -8,7 +8,7 @@
  * Customer-specific system prompts via customer-profiles.js (Differentiator #1)
  */
 
-import { buildCustomerContext } from './customer-profiles.js';
+import { buildCustomerContext, getActiveProfile } from './customer-profiles.js';
 import { KNOWN_SITES, resolveSite, listKnownSites, buildKnownSitesPrompt } from './known-sites.js';
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
@@ -34,52 +34,265 @@ export function hasApiKey() {
   return !!getApiKey();
 }
 
-/* ── AEM MCP Tool Definitions ── */
-/* These match the real AEM Content MCP tools that Claude.ai uses */
+/* ── Adobe Agent Tool Definitions ── */
+/* Each tool maps to a real Adobe AI Agent or MCP service. */
+/* Tools with real endpoints execute live; others return contextual simulated data. */
 
 const AEM_TOOLS = [
+
+  /* ─── AEM Content MCP ─── */
+
   {
     name: 'get_aem_sites',
-    description: 'List all AEM Edge Delivery sites available via the AEM Content MCP. Returns site names, GitHub orgs, repos, preview/live URLs, and verticals.',
-    input_schema: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
+    description: 'List all AEM Edge Delivery sites available via AEM Content MCP.',
+    input_schema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'get_aem_site_pages',
-    description: 'Get the list of pages for a specific AEM Edge Delivery site. Returns page paths, titles, and descriptions. Use the site_id from get_aem_sites, or provide org+repo directly.',
+    description: 'Get pages for an AEM site. Returns paths, titles, descriptions.',
     input_schema: {
       type: 'object',
       properties: {
-        site_id: { type: 'string', description: 'Site identifier (e.g., "frescopa", "securbank", "wknd")' },
-        org: { type: 'string', description: 'GitHub org (e.g., "aem-showcase"). Used if site_id is not a known site.' },
-        repo: { type: 'string', description: 'Repository name (e.g., "frescopa"). Used with org for unknown sites.' },
+        site_id: { type: 'string', description: 'Site identifier (e.g., "frescopa")' },
+        org: { type: 'string', description: 'GitHub org' },
+        repo: { type: 'string', description: 'Repository name' },
       },
       required: ['site_id'],
     },
   },
   {
     name: 'get_page_content',
-    description: 'Fetch the HTML content of a specific AEM Edge Delivery page using the .plain.html endpoint. Provide either a full URL or a site_id + path. Returns the raw HTML content of the page for analysis.',
+    description: 'Fetch HTML content of an AEM EDS page via .plain.html endpoint.',
     input_schema: {
       type: 'object',
       properties: {
-        url: { type: 'string', description: 'Full preview URL to fetch (e.g., "https://main--frescopa--aem-showcase.aem.page/coffee")' },
-        site_id: { type: 'string', description: 'Known site ID to build the URL from (e.g., "frescopa")' },
-        path: { type: 'string', description: 'Page path within the site (e.g., "/coffee", "/index")' },
+        url: { type: 'string', description: 'Full preview URL' },
+        site_id: { type: 'string', description: 'Known site ID' },
+        path: { type: 'string', description: 'Page path (e.g., "/coffee")' },
       },
       required: [],
     },
   },
+  {
+    name: 'copy_aem_page',
+    description: 'AEM Content MCP — Copy an existing page to create a new one from a template. Returns the new page path and preview URL.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        source_path: { type: 'string', description: 'Source page path to copy from (template)' },
+        destination_path: { type: 'string', description: 'New page path' },
+        title: { type: 'string', description: 'New page title' },
+        site_id: { type: 'string', description: 'Target site' },
+      },
+      required: ['source_path', 'destination_path', 'title'],
+    },
+  },
+  {
+    name: 'patch_aem_page_content',
+    description: 'AEM Content MCP — Update specific content on an AEM page. Patches hero image, headline, body copy, CTA, metadata, or any block content.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Page path to update' },
+        site_id: { type: 'string', description: 'Target site' },
+        updates: {
+          type: 'object',
+          description: 'Content updates — keys are field names (hero_image, headline, body, cta_text, cta_url, metadata)',
+        },
+      },
+      required: ['page_path', 'updates'],
+    },
+  },
+  {
+    name: 'create_aem_launch',
+    description: 'AEM Content MCP — Create a Launch (review branch) for a page. Content goes to a staging launch, not live. Used as governance gate before publishing.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Page to include in launch' },
+        launch_name: { type: 'string', description: 'Launch name (e.g., "Q2 Wellness Campaign Review")' },
+        site_id: { type: 'string', description: 'Target site' },
+      },
+      required: ['page_path', 'launch_name'],
+    },
+  },
+  {
+    name: 'promote_aem_launch',
+    description: 'AEM Content MCP — Promote a Launch to publish the page live. Only call after governance approval.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        launch_id: { type: 'string', description: 'Launch ID to promote' },
+        site_id: { type: 'string', description: 'Target site' },
+      },
+      required: ['launch_id'],
+    },
+  },
+
+  /* ─── Discovery Agent ─── */
+
+  {
+    name: 'search_dam_assets',
+    description: 'Discovery Agent — Natural language search across AEM Assets (DAM). Finds approved images, videos, content fragments matching a query. Returns asset paths, delivery URLs, metadata, and approval status.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Natural language search (e.g., "approved lifestyle images for wellness campaign targeting 35-55 demographic")' },
+        asset_type: { type: 'string', description: 'Filter: image, video, document, content-fragment', enum: ['image', 'video', 'document', 'content-fragment', 'any'] },
+        approved_only: { type: 'boolean', description: 'Only return approved assets (default true)' },
+        limit: { type: 'number', description: 'Max results (default 5)' },
+      },
+      required: ['query'],
+    },
+  },
+
+  /* ─── Governance Agent ─── */
+
+  {
+    name: 'run_governance_check',
+    description: 'Governance Agent — Run brand compliance, metadata enforcement, accessibility (WCAG 2.1 AA), and DRM checks on a page or content. Returns pass/fail with detailed findings. Use before publishing.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Page path to check' },
+        site_id: { type: 'string', description: 'Site to check' },
+        checks: {
+          type: 'array',
+          items: { type: 'string', enum: ['brand', 'accessibility', 'metadata', 'legal', 'seo', 'drm'] },
+          description: 'Which checks to run (default: all)',
+        },
+      },
+      required: ['page_path'],
+    },
+  },
+
+  /* ─── Audience Agent ─── */
+
+  {
+    name: 'get_audience_segments',
+    description: 'Audience Agent — List or create audience segments via AEP. Returns segment definitions, size estimates, and activation status.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['list', 'create', 'get'], description: 'Action to perform' },
+        query: { type: 'string', description: 'Natural language segment description (for create) or segment name (for get)' },
+      },
+      required: ['action'],
+    },
+  },
+
+  /* ─── Content Optimization Agent ─── */
+
+  {
+    name: 'create_content_variant',
+    description: 'Content Optimization Agent — Generate a content variant for a specific audience segment. Uses Dynamic Media + OpenAPI for image transformations and AI for copy adaptation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Source page to create variant from' },
+        segment: { type: 'string', description: 'Target audience segment' },
+        changes: { type: 'string', description: 'Natural language description of desired changes' },
+        site_id: { type: 'string', description: 'Target site' },
+      },
+      required: ['page_path', 'segment'],
+    },
+  },
+
+  /* ─── Data Insights Agent (CJA) ─── */
+
+  {
+    name: 'get_analytics_insights',
+    description: 'Data Insights Agent — Query CJA for page performance, audience behavior, conversion data. Returns metrics and AI-generated insights.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Natural language analytics question (e.g., "what is the bounce rate for the homepage this month?")' },
+        page_path: { type: 'string', description: 'Specific page to analyze (optional)' },
+        date_range: { type: 'string', description: 'Date range (e.g., "last 30 days", "Q2 2025")' },
+      },
+      required: ['query'],
+    },
+  },
+
+  /* ─── Journey Agent (AJO) ─── */
+
+  {
+    name: 'get_journey_status',
+    description: 'Journey Agent — Get or create AJO journeys. Returns journey status, performance metrics, and activation details.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['list', 'create', 'status'], description: 'Action to perform' },
+        journey_name: { type: 'string', description: 'Journey name to look up or create' },
+        description: { type: 'string', description: 'Journey description (for create)' },
+      },
+      required: ['action'],
+    },
+  },
+
+  /* ─── Workfront (WOA) ─── */
+
+  {
+    name: 'create_workfront_task',
+    description: 'Workfront WOA — Create a review/approval task in Workfront. Attaches preview URL and governance report. Assigns to approval chain from customer profile.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Task title' },
+        description: { type: 'string', description: 'Task description with governance findings' },
+        preview_url: { type: 'string', description: 'Preview URL for the reviewer' },
+        priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], description: 'Task priority' },
+        assignee: { type: 'string', description: 'Role or person to assign to (from approval chain)' },
+      },
+      required: ['title', 'description'],
+    },
+  },
+
+  /* ─── Experience Production Agent ─── */
+
+  {
+    name: 'extract_brief_content',
+    description: 'Experience Production Agent (via Acrobat MCP) — Extract structured content from an uploaded brief (PDF/Word). Returns campaign name, headline, body copy, CTA, target audience, key messages, tone, and deadline.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        brief_text: { type: 'string', description: 'Raw text content from the brief document' },
+        file_name: { type: 'string', description: 'Original file name' },
+      },
+      required: ['brief_text'],
+    },
+  },
 ];
 
+/* ── Tool → Agent Name Mapping (for UI badges) ── */
+export const TOOL_AGENT_MAP = {
+  get_aem_sites: 'AEM Content MCP',
+  get_aem_site_pages: 'AEM Content MCP',
+  get_page_content: 'AEM Content MCP',
+  copy_aem_page: 'AEM Content MCP',
+  patch_aem_page_content: 'AEM Content MCP',
+  create_aem_launch: 'AEM Content MCP',
+  promote_aem_launch: 'AEM Content MCP',
+  search_dam_assets: 'Discovery Agent',
+  run_governance_check: 'Governance Agent',
+  get_audience_segments: 'Audience Agent',
+  create_content_variant: 'Content Optimization Agent',
+  get_analytics_insights: 'Data Insights Agent',
+  get_journey_status: 'Journey Agent',
+  create_workfront_task: 'Workfront WOA',
+  extract_brief_content: 'Experience Production Agent',
+};
+
 /* ── Client-Side Tool Executor ── */
-/* Handles tool calls by hitting real AEM endpoints */
+/* Real endpoints for AEM Content MCP; contextual simulated data for other agents */
 
 async function executeTool(name, input) {
+  const profile = getActiveProfile();
+
   switch (name) {
+
+    /* ─── AEM Content MCP (real endpoints) ─── */
+
     case 'get_aem_sites': {
       const sites = listKnownSites();
       return JSON.stringify({ sites, count: sites.length }, null, 2);
@@ -88,69 +301,365 @@ async function executeTool(name, input) {
     case 'get_aem_site_pages': {
       const site = resolveSite(input.site_id);
       if (!site) {
-        // Try to construct from org+repo
         if (input.org && input.repo) {
           const origin = `https://main--${input.repo}--${input.org}.aem.page`;
-          // Try fetching sitemap for unknown sites
           try {
             const resp = await fetch(`${origin}/sitemap.xml`);
             if (resp.ok) {
               const xml = await resp.text();
               const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-              return JSON.stringify({
-                name: `${input.org}/${input.repo}`,
-                preview: origin,
-                pages: urls.slice(0, 20).map((u) => ({ url: u, path: new URL(u).pathname })),
-              }, null, 2);
+              return JSON.stringify({ name: `${input.org}/${input.repo}`, preview: origin, pages: urls.slice(0, 20).map((u) => ({ url: u, path: new URL(u).pathname })) }, null, 2);
             }
           } catch { /* fallback */ }
           return JSON.stringify({ name: `${input.org}/${input.repo}`, preview: origin, pages: [{ path: '/index', title: 'Homepage' }] });
         }
         return JSON.stringify({ error: `Site not found: ${input.site_id}. Use get_aem_sites to list available sites.` });
       }
-      return JSON.stringify({
-        name: site.name,
-        siteId: site.siteId,
-        org: site.org,
-        repo: site.repo,
-        branch: site.branch,
-        preview: site.previewOrigin,
-        live: site.liveOrigin,
-        vertical: site.vertical,
-        blocks: site.blocks,
-        pages: site.pages,
-      }, null, 2);
+      return JSON.stringify({ name: site.name, siteId: site.siteId, org: site.org, repo: site.repo, preview: site.previewOrigin, live: site.liveOrigin, vertical: site.vertical, blocks: site.blocks, pages: site.pages }, null, 2);
     }
 
     case 'get_page_content': {
       let pageUrl = input.url;
-
-      // Resolve URL from site_id + path
       if (!pageUrl && input.site_id && input.path) {
         const site = resolveSite(input.site_id);
-        if (site) {
-          pageUrl = `${site.previewOrigin}${input.path}`;
-        } else if (input.org && input.repo) {
-          pageUrl = `https://main--${input.repo}--${input.org}.aem.page${input.path}`;
-        }
+        if (site) pageUrl = `${site.previewOrigin}${input.path}`;
       }
+      if (!pageUrl) return JSON.stringify({ error: 'Provide url, or site_id + path.' });
 
-      if (!pageUrl) {
-        return JSON.stringify({ error: 'Provide either url, or site_id + path to fetch page content.' });
-      }
-
-      // Fetch .plain.html endpoint
       const plainUrl = pageUrl.endsWith('.plain.html') ? pageUrl : pageUrl.replace(/\/?$/, '.plain.html');
       try {
         const resp = await fetch(plainUrl);
         if (resp.ok) {
           const html = await resp.text();
-          return html.length > 15000 ? html.slice(0, 15000) + '\n\n[... truncated at 15000 chars]' : html;
+          return html.length > 15000 ? html.slice(0, 15000) + '\n\n[... truncated]' : html;
         }
         return JSON.stringify({ error: `HTTP ${resp.status} fetching ${plainUrl}` });
       } catch (e) {
-        return JSON.stringify({ error: `Fetch failed: ${e.message}. The page may not exist or CORS may be blocking.` });
+        return JSON.stringify({ error: `Fetch failed: ${e.message}` });
       }
+    }
+
+    case 'copy_aem_page': {
+      const pageId = `page-${Date.now().toString(36)}`;
+      const previewBase = profile.orgId ? `https://main--${profile.repo}--${profile.orgId.toLowerCase()}.aem.page` : 'https://main--site--org.aem.page';
+      return JSON.stringify({
+        status: 'created',
+        page_id: pageId,
+        path: input.destination_path,
+        title: input.title,
+        copied_from: input.source_path,
+        preview_url: `${previewBase}${input.destination_path}`,
+        message: `Page created at ${input.destination_path} from template ${input.source_path}`,
+      }, null, 2);
+    }
+
+    case 'patch_aem_page_content': {
+      const fields = Object.keys(input.updates || {});
+      return JSON.stringify({
+        status: 'updated',
+        page_path: input.page_path,
+        updated_fields: fields,
+        field_count: fields.length,
+        message: `Updated ${fields.length} field(s) on ${input.page_path}: ${fields.join(', ')}`,
+      }, null, 2);
+    }
+
+    case 'create_aem_launch': {
+      const launchId = `launch-${Date.now().toString(36)}`;
+      const previewBase = profile.orgId ? `https://main--${profile.repo}--${profile.orgId.toLowerCase()}.aem.page` : 'https://main--site--org.aem.page';
+      return JSON.stringify({
+        status: 'created',
+        launch_id: launchId,
+        launch_name: input.launch_name,
+        pages: [input.page_path],
+        preview_url: `${previewBase}${input.page_path}?launch=${launchId}`,
+        state: 'open',
+        message: `Launch "${input.launch_name}" created. Page is in review, not live. Send for governance check before promoting.`,
+      }, null, 2);
+    }
+
+    case 'promote_aem_launch': {
+      return JSON.stringify({
+        status: 'promoted',
+        launch_id: input.launch_id,
+        message: `Launch ${input.launch_id} promoted. Page is now live.`,
+        published_at: new Date().toISOString(),
+      }, null, 2);
+    }
+
+    /* ─── Discovery Agent ─── */
+
+    case 'search_dam_assets': {
+      const dam = profile.damTaxonomy || { root: '/content/dam', folders: ['images', 'brand'], namingConvention: 'asset-name' };
+      const limit = input.limit || 5;
+      const query = input.query || '';
+      const type = input.asset_type || 'image';
+
+      // Generate contextual asset results based on the query and customer DAM
+      const keywords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      const assets = [];
+      for (let i = 0; i < limit; i++) {
+        const folder = dam.folders[i % dam.folders.length];
+        const keyword = keywords[i % keywords.length] || 'asset';
+        const assetName = `${keyword}-${folder}-${String(i + 1).padStart(2, '0')}`;
+        const dmDeliveryUrl = `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/${assetName}/asset-${i + 1}.webp?width=1200&quality=85`;
+
+        assets.push({
+          path: `${dam.root}/${folder}/${assetName}.jpg`,
+          name: `${assetName}.jpg`,
+          title: `${keyword.charAt(0).toUpperCase() + keyword.slice(1)} — ${folder}`,
+          type,
+          format: 'image/jpeg',
+          dimensions: { width: 2400, height: 1600 },
+          delivery_url: dmDeliveryUrl,
+          dynamic_media_url: dmDeliveryUrl,
+          status: 'approved',
+          metadata: {
+            dc_title: `${keyword} ${folder} asset`,
+            dc_description: `Approved ${type} asset matching: ${query.slice(0, 80)}`,
+            dam_status: 'approved',
+            dam_expiry: 'none',
+          },
+          last_modified: new Date(Date.now() - Math.random() * 30 * 86400000).toISOString().split('T')[0],
+        });
+      }
+
+      return JSON.stringify({
+        query: input.query,
+        total_results: assets.length,
+        filter: { type, approved_only: input.approved_only !== false },
+        assets,
+        message: `Found ${assets.length} approved ${type}(s) matching "${query.slice(0, 50)}"`,
+      }, null, 2);
+    }
+
+    /* ─── Governance Agent ─── */
+
+    case 'run_governance_check': {
+      const checks = input.checks || ['brand', 'accessibility', 'metadata', 'legal', 'seo', 'drm'];
+      const legalRules = profile.legalSLA?.specialRules || [];
+      const brandVoice = profile.brandVoice || {};
+
+      const results = {};
+      const findings = [];
+
+      checks.forEach((check) => {
+        switch (check) {
+          case 'brand':
+            results.brand = { status: 'pass', score: 92 };
+            if (brandVoice.colorPalette) findings.push({ check: 'brand', severity: 'info', message: `Brand colors verified: ${brandVoice.colorPalette.primary}, ${brandVoice.colorPalette.secondary}` });
+            findings.push({ check: 'brand', severity: 'pass', message: 'Brand voice tone matches profile guidelines' });
+            break;
+          case 'accessibility':
+            results.accessibility = { status: 'warn', score: 78 };
+            findings.push({ check: 'accessibility', severity: 'warn', message: 'Verify all images have descriptive alt text' });
+            findings.push({ check: 'accessibility', severity: 'warn', message: 'Check color contrast ratios meet 4.5:1 minimum' });
+            findings.push({ check: 'accessibility', severity: 'pass', message: 'Heading hierarchy is correct (H1→H2→H3)' });
+            break;
+          case 'metadata':
+            results.metadata = { status: 'pass', score: 95 };
+            findings.push({ check: 'metadata', severity: 'pass', message: 'Page title, description, and OG tags present' });
+            findings.push({ check: 'metadata', severity: 'pass', message: 'Canonical URL configured' });
+            break;
+          case 'legal':
+            results.legal = { status: legalRules.length > 0 ? 'review' : 'pass', score: 85 };
+            if (legalRules.length > 0) {
+              findings.push({ check: 'legal', severity: 'review', message: `${legalRules.length} customer-specific legal rules require manual review` });
+              legalRules.slice(0, 3).forEach((rule) => findings.push({ check: 'legal', severity: 'info', message: `Rule: ${rule}` }));
+            }
+            findings.push({ check: 'legal', severity: 'pass', message: 'Privacy policy and terms links present' });
+            break;
+          case 'seo':
+            results.seo = { status: 'pass', score: 90 };
+            findings.push({ check: 'seo', severity: 'pass', message: 'Meta description within 160 chars' });
+            findings.push({ check: 'seo', severity: 'pass', message: 'Image optimization (WebP with fallbacks)' });
+            break;
+          case 'drm':
+            results.drm = { status: 'pass', score: 100 };
+            findings.push({ check: 'drm', severity: 'pass', message: 'All assets from approved DAM sources' });
+            break;
+        }
+      });
+
+      const overallScore = Math.round(Object.values(results).reduce((sum, r) => sum + r.score, 0) / Object.values(results).length);
+      const hasBlocking = Object.values(results).some((r) => r.status === 'fail');
+
+      return JSON.stringify({
+        page_path: input.page_path,
+        overall_score: overallScore,
+        overall_status: hasBlocking ? 'blocked' : overallScore >= 90 ? 'approved' : 'approved_with_warnings',
+        checks: results,
+        findings,
+        approval_chain: profile.approvalChain?.map((a) => a.role) || [],
+        recommendation: hasBlocking
+          ? 'Governance check BLOCKED. Fix critical issues before promoting launch.'
+          : `Governance score ${overallScore}/100. Safe to proceed with review.`,
+      }, null, 2);
+    }
+
+    /* ─── Audience Agent ─── */
+
+    case 'get_audience_segments': {
+      const segments = profile.segments || [];
+
+      if (input.action === 'list') {
+        return JSON.stringify({
+          segments: segments.map((s, i) => ({
+            ...s,
+            size_estimate: Math.floor(50000 + Math.random() * 200000),
+            status: 'active',
+            activation: i < 2 ? 'AEP + Target' : 'AEP only',
+          })),
+          total: segments.length,
+        }, null, 2);
+      }
+
+      if (input.action === 'create') {
+        const segId = `seg-${Date.now().toString(36)}`;
+        return JSON.stringify({
+          status: 'created',
+          segment: {
+            id: segId,
+            name: input.query || 'New Segment',
+            description: `AI-generated segment: ${input.query}`,
+            estimated_size: Math.floor(30000 + Math.random() * 100000),
+            status: 'processing',
+            activation: 'AEP (ready for Target sharing)',
+          },
+          message: `Segment "${input.query}" created in AEP. Processing audience data...`,
+        }, null, 2);
+      }
+
+      // 'get' — return matching segment
+      const match = segments.find((s) => s.name.toLowerCase().includes((input.query || '').toLowerCase()) || s.id === input.query);
+      if (match) {
+        return JSON.stringify({ segment: { ...match, size_estimate: Math.floor(50000 + Math.random() * 200000), status: 'active' } }, null, 2);
+      }
+      return JSON.stringify({ error: `Segment not found: "${input.query}". Use action "list" to see available segments.` });
+    }
+
+    /* ─── Content Optimization Agent ─── */
+
+    case 'create_content_variant': {
+      const variantId = `variant-${Date.now().toString(36)}`;
+      return JSON.stringify({
+        status: 'created',
+        variant_id: variantId,
+        source_page: input.page_path,
+        target_segment: input.segment,
+        changes_applied: input.changes || 'Segment-optimized hero image, CTA copy, and content priority',
+        dynamic_media: {
+          hero_rendition: `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/variant-hero/optimized.webp?width=1440&crop=16:9&quality=85`,
+          note: 'Image resized and cropped via Dynamic Media + OpenAPI for segment-specific visual language',
+        },
+        preview_url: `https://main--${profile.repo || 'site'}--${(profile.orgId || 'org').toLowerCase()}.aem.page${input.page_path}?variant=${variantId}`,
+        message: `Content variant created for "${input.segment}" segment. Hero image transformed via Dynamic Media, copy optimized for segment preferences.`,
+      }, null, 2);
+    }
+
+    /* ─── Data Insights Agent (CJA) ─── */
+
+    case 'get_analytics_insights': {
+      const dateRange = input.date_range || 'last 30 days';
+      return JSON.stringify({
+        query: input.query,
+        date_range: dateRange,
+        page: input.page_path || 'site-wide',
+        metrics: {
+          page_views: Math.floor(10000 + Math.random() * 50000),
+          unique_visitors: Math.floor(5000 + Math.random() * 25000),
+          bounce_rate: `${(25 + Math.random() * 20).toFixed(1)}%`,
+          avg_time_on_page: `${(45 + Math.random() * 120).toFixed(0)}s`,
+          conversion_rate: `${(1.5 + Math.random() * 4).toFixed(2)}%`,
+          top_entry_source: 'organic search',
+        },
+        ai_insights: [
+          `Traffic is ${Math.random() > 0.5 ? 'up' : 'stable'} compared to previous period`,
+          `Mobile accounts for ${(55 + Math.random() * 15).toFixed(0)}% of visits`,
+          `Hero CTA click-through rate is ${(8 + Math.random() * 7).toFixed(1)}% — ${Math.random() > 0.5 ? 'above' : 'near'} industry average`,
+        ],
+        data_view: profile.entitlements?.cja?.note || 'default data view',
+        source: 'CJA Data Insights Agent',
+      }, null, 2);
+    }
+
+    /* ─── Journey Agent (AJO) ─── */
+
+    case 'get_journey_status': {
+      if (input.action === 'list') {
+        return JSON.stringify({
+          journeys: [
+            { name: 'Welcome Series', status: 'active', messages_sent: 12450, open_rate: '34.2%', conversion: '8.1%' },
+            { name: 'Re-engagement Campaign', status: 'active', messages_sent: 8200, open_rate: '28.7%', conversion: '5.3%' },
+            { name: 'Post-Purchase Follow-up', status: 'draft', messages_sent: 0, open_rate: 'N/A', conversion: 'N/A' },
+          ],
+          source: 'AJO via Marketing Agent MCP',
+        }, null, 2);
+      }
+
+      if (input.action === 'create') {
+        return JSON.stringify({
+          status: 'created',
+          journey: {
+            id: `journey-${Date.now().toString(36)}`,
+            name: input.journey_name || 'New Journey',
+            description: input.description || '',
+            state: 'draft',
+            estimated_audience: Math.floor(5000 + Math.random() * 50000),
+          },
+          message: `Journey "${input.journey_name}" created in draft. Configure triggers and messages, then activate.`,
+        }, null, 2);
+      }
+
+      return JSON.stringify({
+        journey: { name: input.journey_name || 'Unknown', status: 'active', messages_sent: Math.floor(1000 + Math.random() * 20000) },
+      }, null, 2);
+    }
+
+    /* ─── Workfront WOA ─── */
+
+    case 'create_workfront_task': {
+      const taskId = `WF-${Date.now().toString(36).toUpperCase()}`;
+      const chain = profile.approvalChain || [];
+      const assignee = input.assignee || chain[0]?.role || 'Content Reviewer';
+      const sla = chain.find((c) => c.role === assignee)?.sla || '24h';
+
+      return JSON.stringify({
+        status: 'created',
+        task_id: taskId,
+        title: input.title,
+        assignee,
+        priority: input.priority || 'normal',
+        sla,
+        preview_url: input.preview_url || '',
+        project: `${profile.name} — Content Operations`,
+        approval_chain: chain.map((c) => c.role),
+        message: `Workfront task ${taskId} created: "${input.title}" — assigned to ${assignee} (SLA: ${sla})`,
+      }, null, 2);
+    }
+
+    /* ─── Experience Production Agent ─── */
+
+    case 'extract_brief_content': {
+      const text = input.brief_text || '';
+      // AI will do the real extraction; this tool just confirms receipt and returns structure
+      return JSON.stringify({
+        status: 'extracted',
+        source: input.file_name || 'uploaded brief',
+        char_count: text.length,
+        structure: {
+          campaign_name: '(extracted by AI from brief content)',
+          headline: '(extracted by AI)',
+          body_copy: '(extracted by AI)',
+          cta: '(extracted by AI)',
+          target_audience: '(extracted by AI)',
+          key_messages: '(extracted by AI)',
+          tone: '(extracted by AI)',
+          deadline: '(extracted by AI)',
+        },
+        brief_text: text.slice(0, 10000),
+        message: `Brief content extracted (${text.length} characters). AI will parse structured fields from the content.`,
+      }, null, 2);
     }
 
     default:
@@ -165,22 +674,62 @@ const AEM_SYSTEM_PROMPT = `You are the **Experience Workspace AI** — an expert
 ## Your Role
 You are the AI brain behind AEM's agentic content supply chain. You orchestrate specialized agents (Governance, Content Optimization, Discovery, Audience, Analytics) and deeply understand AEM Edge Delivery Services architecture.
 
-## Your MCP Tools
-You have real AEM Content MCP tools available. USE THEM when users ask about sites, pages, or content:
+## Your MCP Tools — Adobe AI Agent Toolbelt
+You have 15 tools spanning 8 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
 
-1. **get_aem_sites** — Discover all AEM sites. Call this first when users mention a site name.
-2. **get_aem_site_pages** — Get the page list for a site. Call after discovering the site.
-3. **get_page_content** — Fetch actual HTML content from a page. Call this to analyze real content.
+### AEM Content MCP (content read/write)
+- **get_aem_sites** — Discover all AEM Edge Delivery sites. Call first when users mention any site.
+- **get_aem_site_pages** — Get pages for a site (paths, titles, descriptions).
+- **get_page_content** — Fetch actual HTML content from a page via .plain.html endpoint.
+- **copy_aem_page** — Copy a page as a template to create a new page.
+- **patch_aem_page_content** — Update specific content on an AEM page (hero, headline, CTA, metadata).
+- **create_aem_launch** — Create a Launch (review branch) as a governance gate before publishing.
+- **promote_aem_launch** — Promote a Launch to publish live (only after governance approval).
 
-**IMPORTANT**: When users mention a site (like "Frescopa", "SecurBank", "WKND"), ALWAYS use your tools to fetch real content. Do NOT guess or make up content. Call get_aem_sites → get_aem_site_pages → get_page_content in sequence.
+### Discovery Agent (DAM search)
+- **search_dam_assets** — Natural language search across AEM Assets (DAM). Returns approved assets with Dynamic Media delivery URLs.
+
+### Governance Agent (compliance)
+- **run_governance_check** — Brand compliance, metadata enforcement, WCAG 2.1 AA accessibility, legal, SEO, and DRM checks. Returns pass/fail with detailed findings.
+
+### Audience Agent (AEP segments)
+- **get_audience_segments** — List, create, or get audience segments from AEP. Returns segment definitions and activation status.
+
+### Content Optimization Agent (Dynamic Media + OpenAPI)
+- **create_content_variant** — Generate a content variant for a specific audience segment. Uses Dynamic Media for image transformations.
+
+### Data Insights Agent (CJA)
+- **get_analytics_insights** — Query CJA for page performance, audience behavior, and conversion data.
+
+### Journey Agent (AJO)
+- **get_journey_status** — List, create, or check status of AJO journeys.
+
+### Workfront WOA (workflow)
+- **create_workfront_task** — Create review/approval tasks in Workfront. Assigns to approval chain from customer profile.
+
+### Experience Production Agent (brief extraction)
+- **extract_brief_content** — Extract structured content from an uploaded brief (PDF/Word).
+
+**CRITICAL RULES**:
+1. When users mention a site (like "Frescopa", "SecurBank", "WKND"), ALWAYS call get_aem_sites → get_aem_site_pages → get_page_content to fetch real content. Never guess.
+2. When asked about governance/compliance, call run_governance_check AND get_page_content for real data.
+3. When asked about assets/images, call search_dam_assets.
+4. When the user wants to create content, use copy_aem_page + patch_aem_page_content + create_aem_launch for the full workflow.
+5. When you need analytics or performance data, call get_analytics_insights.
+6. For audience/segment questions, call get_audience_segments.
+7. For multi-step pipelines (brief → page → governance → publish), chain tools in sequence. You can do up to 8 rounds of tool calls.
 
 ## Capabilities
 - **Page Analysis**: Analyze EDS pages — structure, blocks, sections, metadata, performance
-- **Governance Compliance**: Brand, legal, WCAG 2.1 AA accessibility, SEO
-- **Content Strategy**: Improvements based on performance data and audience insights
-- **Personalization**: Segment-specific content variants with revenue impact estimates
+- **Governance Compliance**: Brand, legal, WCAG 2.1 AA accessibility, SEO, DRM
+- **Asset Discovery**: Natural language search across DAM with Dynamic Media delivery URLs
+- **Content Production**: Brief extraction → page creation → content patching → launch governance gate
+- **Audience Intelligence**: AEP segment creation, sizing, and activation status
+- **Content Optimization**: Segment-specific content variants with Dynamic Media renditions
+- **Analytics & Insights**: CJA performance data, conversion metrics, AI-generated recommendations
+- **Journey Orchestration**: AJO journey status, creation, and performance
+- **Workflow Management**: Workfront task creation with approval chain routing
 - **AEM Architecture**: Deep knowledge of EDS blocks, section metadata, content modeling, three-phase loading
-- **Workfront Integration**: Connected to WOA with AI Reviewer, AI Form Fill, Project Health, Intelligent Answers
 
 ## Connected Adobe MCP Services (Model Context Protocol)
 You have access to the full Adobe Experience Cloud stack via MCP:

@@ -11,6 +11,7 @@
 
 import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js';
 import * as ai from './ai.js';
+import { TOOL_AGENT_MAP } from './ai.js';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
@@ -220,11 +221,18 @@ async function handleRealChat(text) {
   let toolContainer = null;
   let toolCount = 0;
 
+  // Track which agent badges have been shown
+  const shownAgents = new Set();
+
   function onToolCall(toolName, toolInput) {
     toolCount++;
-    if (!toolContainer) {
+    const agentName = TOOL_AGENT_MAP[toolName] || 'Adobe Agent';
+
+    // Create a new tool container per agent (so each agent gets its own badge)
+    if (!toolContainer || !shownAgents.has(agentName)) {
+      shownAgents.add(agentName);
       toolContainer = addRawHTML(`
-        <div class="agent-badge">AEM Content MCP</div>
+        <div class="agent-badge">${agentName}</div>
         <div class="message-content mcp-tool-calls"></div>
       `);
     }
@@ -267,14 +275,33 @@ async function handleRealChat(text) {
 
 /* Format tool input for display */
 function formatToolInput(toolName, input) {
-  if (toolName === 'get_aem_sites') return '';
-  if (toolName === 'get_aem_site_pages') return `"${input.site_id || ''}"`;
-  if (toolName === 'get_page_content') {
-    if (input.url) return `"${input.url.split('/').pop() || input.url}"`;
-    if (input.path) return `"${input.site_id || ''}${input.path}"`;
-    return '';
+  if (!input || Object.keys(input).length === 0) return '';
+
+  switch (toolName) {
+    case 'get_aem_sites': return '';
+    case 'get_aem_site_pages': return `"${input.site_id || ''}"`;
+    case 'get_page_content': {
+      if (input.url) return `"${input.url.split('/').pop() || input.url}"`;
+      if (input.path) return `"${input.site_id || ''}${input.path}"`;
+      return '';
+    }
+    case 'copy_aem_page': return `"${input.destination_path || ''}"`;
+    case 'patch_aem_page_content': return `"${input.page_path || ''}"`;
+    case 'create_aem_launch': return `"${input.launch_name || ''}"`;
+    case 'promote_aem_launch': return `"${input.launch_id || ''}"`;
+    case 'search_dam_assets': return `"${(input.query || '').slice(0, 30)}"`;
+    case 'run_governance_check': return `"${input.page_path || ''}"`;
+    case 'get_audience_segments': return `${input.action || 'list'}`;
+    case 'create_content_variant': return `"${input.segment || ''}"`;
+    case 'get_analytics_insights': return `"${(input.query || '').slice(0, 30)}"`;
+    case 'get_journey_status': return `${input.action || 'list'}`;
+    case 'create_workfront_task': return `"${(input.title || '').slice(0, 30)}"`;
+    case 'extract_brief_content': return `"${input.file_name || 'brief'}"`;
+    default: {
+      const str = JSON.stringify(input);
+      return str.length > 40 ? str.slice(0, 37) + '...' : str;
+    }
   }
-  return JSON.stringify(input).slice(0, 40);
 }
 
 /* ── REAL: Governance Scan ── */
