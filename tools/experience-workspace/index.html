@@ -57,7 +57,8 @@
 
         <label class="settings-label">Customer Profile</label>
         <div id="orgSelector" class="org-selector"></div>
-        <div class="settings-hint">Switch customer profiles — brand voice, segments, approval chains, and legal rules update automatically</div>
+        <button id="newProfileBtn" class="new-profile-btn">+ New Customer Profile</button>
+        <div class="settings-hint">Switch profiles or generate new ones from discovery notes</div>
 
         <label class="settings-label" style="margin-top:16px">Claude API Key</label>
         <input type="password" id="claudeKeyInput" class="settings-input" placeholder="sk-ant-...">
@@ -65,6 +66,54 @@
         <div class="settings-actions">
           <button class="settings-save" onclick="document.getElementById('settingsPanel').classList.remove('visible'); const k=document.getElementById('claudeKeyInput'); if(k.value && !k.value.endsWith('...')) localStorage.setItem('ew-claude-key',k.value.trim()); location.reload();">Save</button>
           <button class="settings-cancel" onclick="document.getElementById('settingsPanel').classList.remove('visible')">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Profile Generator Modal -->
+      <div id="profileModal" class="profile-modal">
+        <div class="profile-modal-content">
+          <div class="profile-modal-header">
+            <span class="profile-modal-title">Generate Customer Profile</span>
+            <button id="profileModalClose" class="profile-modal-close">&times;</button>
+          </div>
+
+          <!-- Step 1: Input -->
+          <div id="profileStep1" class="profile-step">
+            <p class="profile-step-desc">Paste discovery call notes and/or a customer URL. The AI will extract brand voice, segments, approval chains, legal rules, and more.</p>
+
+            <label class="settings-label">Customer Website URL</label>
+            <input type="url" id="profileUrl" class="settings-input" placeholder="https://corporate.ralphlauren.com">
+            <div class="settings-hint">We'll scrape brand colors, typography, content structure, and navigation</div>
+
+            <label class="settings-label" style="margin-top:14px">Discovery Notes</label>
+            <textarea id="profileNotes" class="profile-textarea" rows="8" placeholder="Paste discovery call notes, customer requirements, or any context about the customer...&#10;&#10;Example:&#10;- Assets-only customer (very mature)&#10;- Wanting to learn about Sites&#10;- Lost a deal to Contentful&#10;- Corporate 'About RL' site is hand-coded&#10;- Key audiences: investors, press, careers"></textarea>
+            <div class="profile-upload-row">
+              <button id="profileUploadBtn" class="profile-upload-btn">Upload notes file</button>
+              <span id="profileFileName" class="profile-file-name"></span>
+            </div>
+
+            <button id="profileGenerateBtn" class="profile-generate-btn">Generate Profile</button>
+          </div>
+
+          <!-- Step 2: Generating -->
+          <div id="profileStep2" class="profile-step" style="display:none">
+            <div class="profile-generating">
+              <div class="profile-gen-spinner"></div>
+              <div class="profile-gen-status" id="profileGenStatus">Analyzing customer...</div>
+              <div class="profile-gen-steps" id="profileGenSteps"></div>
+            </div>
+          </div>
+
+          <!-- Step 3: Review & Save -->
+          <div id="profileStep3" class="profile-step" style="display:none">
+            <p class="profile-step-desc">Review the generated profile. Edit any fields, then save.</p>
+            <div id="profilePreview" class="profile-preview"></div>
+            <textarea id="profileJson" class="profile-json-editor" rows="12"></textarea>
+            <div class="profile-actions">
+              <button id="profileSaveBtn" class="profile-generate-btn">Save & Activate Profile</button>
+              <button id="profileBackBtn" class="settings-cancel">Back</button>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -13,7 +13,7 @@ import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './im
 import * as ai from './ai.js';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
-import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext } from './customer-profiles.js';
+import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 
 /* ── Dynamic Org Configuration (from customer profile) ── */
 let AEM_ORG = getOrgConfig();
@@ -1086,14 +1086,271 @@ function buildOrgSelector() {
 
   container.innerHTML = '';
   profiles.forEach((p) => {
-    const opt = document.createElement('button');
-    opt.classList.add('org-option');
-    if (p.id === activeId) opt.classList.add('active');
-    opt.dataset.profile = p.id;
-    opt.innerHTML = `<span class="org-name">${p.name}</span><span class="org-vertical">${p.vertical}</span>`;
-    opt.addEventListener('click', () => switchProfile(p.id));
-    container.appendChild(opt);
+    if (p.isCustom) {
+      // Custom profiles get a delete button
+      const wrap = document.createElement('div');
+      wrap.classList.add('org-option-wrap');
+
+      const opt = document.createElement('button');
+      opt.classList.add('org-option');
+      if (p.id === activeId) opt.classList.add('active');
+      opt.dataset.profile = p.id;
+      opt.innerHTML = `<span class="org-name">${p.name}</span><span class="org-vertical">${p.vertical}</span>`;
+      opt.addEventListener('click', () => switchProfile(p.id));
+
+      const del = document.createElement('button');
+      del.classList.add('org-delete-btn');
+      del.title = 'Delete custom profile';
+      del.textContent = '\u2715';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (getActiveProfile().id === p.id) switchProfile('aem-xsc');
+        deleteCustomProfile(p.id);
+        buildOrgSelector();
+      });
+
+      wrap.appendChild(opt);
+      wrap.appendChild(del);
+      container.appendChild(wrap);
+    } else {
+      const opt = document.createElement('button');
+      opt.classList.add('org-option');
+      if (p.id === activeId) opt.classList.add('active');
+      opt.dataset.profile = p.id;
+      opt.innerHTML = `<span class="org-name">${p.name}</span><span class="org-vertical">${p.vertical}</span>`;
+      opt.addEventListener('click', () => switchProfile(p.id));
+      container.appendChild(opt);
+    }
   });
+}
+
+/* ── Profile Generator (AI-powered customer onboarding) ── */
+function initProfileGenerator() {
+  const modal = document.getElementById('profileModal');
+  const closeBtn = document.getElementById('profileModalClose');
+  const newBtn = document.getElementById('newProfileBtn');
+  const generateBtn = document.getElementById('profileGenerateBtn');
+  const uploadBtn = document.getElementById('profileUploadBtn');
+  const saveBtn = document.getElementById('profileSaveBtn');
+  const backBtn = document.getElementById('profileBackBtn');
+
+  if (!modal || !newBtn) return;
+
+  // Open modal
+  newBtn.addEventListener('click', () => {
+    modal.classList.add('visible');
+    document.getElementById('settingsPanel').classList.remove('visible');
+    showProfileStep(1);
+  });
+
+  // Close modal
+  closeBtn.addEventListener('click', () => modal.classList.remove('visible'));
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.classList.remove('visible');
+  });
+
+  // Upload notes file
+  uploadBtn.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt,.pdf,.doc,.docx,.md';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById('profileFileName').textContent = file.name;
+      try {
+        let text = '';
+        if (file.type === 'application/pdf' && window.pdfjsLib) {
+          const buffer = await file.arrayBuffer();
+          const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+          const pages = [];
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            pages.push(content.items.map((item) => item.str).join(' '));
+          }
+          text = pages.join('\n\n');
+        } else {
+          text = await file.text();
+        }
+        const notes = document.getElementById('profileNotes');
+        notes.value = (notes.value ? notes.value + '\n\n---\n\n' : '') + text;
+      } catch (err) {
+        document.getElementById('profileFileName').textContent = `Error: ${err.message}`;
+      }
+    };
+    input.click();
+  });
+
+  // Generate profile
+  generateBtn.addEventListener('click', () => runProfileGeneration());
+
+  // Save profile
+  saveBtn.addEventListener('click', () => {
+    try {
+      const json = document.getElementById('profileJson').value;
+      const profile = JSON.parse(json);
+      if (!profile.id || !profile.name) throw new Error('Profile needs id and name');
+      addCustomProfile(profile);
+      switchProfile(profile.id);
+      buildOrgSelector();
+      modal.classList.remove('visible');
+      addMessage('assistant', md(`**Customer profile created: ${profile.name}**\nBrand voice, ${profile.segments?.length || 0} segments, approval chain, and legal rules loaded. The AI now speaks ${profile.name}.`));
+    } catch (err) {
+      alert(`Invalid profile JSON: ${err.message}`);
+    }
+  });
+
+  // Back button
+  backBtn.addEventListener('click', () => showProfileStep(1));
+}
+
+function showProfileStep(step) {
+  document.getElementById('profileStep1').style.display = step === 1 ? 'block' : 'none';
+  document.getElementById('profileStep2').style.display = step === 2 ? 'block' : 'none';
+  document.getElementById('profileStep3').style.display = step === 3 ? 'block' : 'none';
+}
+
+async function runProfileGeneration() {
+  const url = document.getElementById('profileUrl').value.trim();
+  const notes = document.getElementById('profileNotes').value.trim();
+
+  if (!url && !notes) {
+    alert('Enter a customer URL, paste discovery notes, or both.');
+    return;
+  }
+
+  if (!ai.hasApiKey()) {
+    alert('Configure your Claude API key first.');
+    return;
+  }
+
+  // Step 2: Show progress
+  showProfileStep(2);
+  const statusEl = document.getElementById('profileGenStatus');
+  const stepsEl = document.getElementById('profileGenSteps');
+  stepsEl.innerHTML = '';
+
+  const addGenStep = (label, state) => {
+    const el = document.createElement('div');
+    el.classList.add('profile-gen-step');
+    el.innerHTML = `<span class="gen-dot ${state}"></span>${label}`;
+    stepsEl.appendChild(el);
+    return el;
+  };
+
+  const updateGenStep = (el, state) => {
+    el.querySelector('.gen-dot').className = `gen-dot ${state}`;
+  };
+
+  // Step 2a: Scrape website if URL provided
+  let siteData = '';
+  if (url) {
+    statusEl.textContent = 'Scraping customer website...';
+    const scrapeStep = addGenStep('Fetching site content & CSS', 'active');
+
+    try {
+      // Fetch the page HTML
+      const resp = await fetch(url, { mode: 'cors' }).catch(() => null);
+      if (resp?.ok) {
+        const html = await resp.text();
+
+        // Extract useful data
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        const title = doc.querySelector('title')?.textContent || '';
+        const metaDesc = doc.querySelector('meta[name="description"]')?.content || '';
+
+        // Get nav structure
+        const navLinks = [...doc.querySelectorAll('nav a, header a')].map((a) => a.textContent?.trim()).filter(Boolean).slice(0, 20);
+
+        // Get headings
+        const headings = [...doc.querySelectorAll('h1, h2, h3')].map((h) => h.textContent?.trim()).filter(Boolean).slice(0, 15);
+
+        // Extract inline styles / CSS references for color hints
+        const styleSheets = [...doc.querySelectorAll('link[rel="stylesheet"]')].map((l) => l.href).slice(0, 5);
+        const inlineStyles = [...doc.querySelectorAll('style')].map((s) => s.textContent).join('\n').slice(0, 3000);
+
+        // Get body text summary
+        const bodyText = doc.body?.textContent?.replace(/\s+/g, ' ')?.trim()?.slice(0, 2000) || '';
+
+        siteData = `URL: ${url}
+Title: ${title}
+Meta Description: ${metaDesc}
+Navigation Links: ${navLinks.join(', ')}
+Headings: ${headings.join(' | ')}
+CSS Stylesheets: ${styleSheets.join(', ')}
+Inline CSS (excerpt): ${inlineStyles.slice(0, 1000)}
+Body Text (excerpt): ${bodyText}`;
+
+        updateGenStep(scrapeStep, 'done');
+      } else {
+        // CORS blocked — provide URL context only
+        siteData = `URL: ${url}\n(Direct fetch blocked by CORS — use URL context and any discovery notes to infer site structure)`;
+        updateGenStep(scrapeStep, 'done');
+      }
+    } catch {
+      siteData = `URL: ${url}\n(Could not fetch — infer from URL and discovery notes)`;
+      updateGenStep(scrapeStep, 'done');
+    }
+  }
+
+  // Step 2b: Generate profile with AI
+  statusEl.textContent = 'AI generating customer profile...';
+  const aiStep = addGenStep('Extracting brand voice, segments, rules', 'active');
+  const segStep = addGenStep('Building approval chain & legal SLAs', 'pending');
+  const finalStep = addGenStep('Assembling complete profile', 'pending');
+
+  try {
+    const prompt = buildProfilePrompt(notes, siteData);
+    const result = await ai.chat(prompt);
+
+    updateGenStep(aiStep, 'done');
+    updateGenStep(segStep, 'done');
+    updateGenStep(finalStep, 'done');
+    statusEl.textContent = 'Profile generated!';
+
+    // Parse the JSON response
+    let profileJson = result;
+    // Strip markdown fences if present
+    const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) profileJson = jsonMatch[1];
+    // Also try to find raw JSON object
+    const braceMatch = profileJson.match(/\{[\s\S]*\}/);
+    if (braceMatch) profileJson = braceMatch[0];
+
+    const profile = JSON.parse(profileJson);
+
+    // Show step 3: review
+    await sleep(500);
+    showProfileStep(3);
+
+    // Build preview
+    const preview = document.getElementById('profilePreview');
+    const colors = profile.brandVoice?.colorPalette;
+    preview.innerHTML = `
+      <div class="pv-name">${profile.name}</div>
+      <div class="pv-meta">${profile.vertical} &bull; ${profile.tier}</div>
+      <div class="pv-section"><div class="pv-label">Brand Voice</div>${profile.brandVoice?.tone || 'Not specified'} — ${profile.brandVoice?.style || ''}</div>
+      ${colors ? `<div class="pv-section"><div class="pv-label">Brand Colors</div><div class="pv-colors">${Object.entries(colors).map(([k, v]) => `<div class="pv-swatch" style="background:${v}" title="${k}: ${v}"></div>`).join('')}</div></div>` : ''}
+      <div class="pv-section"><div class="pv-label">Segments (${profile.segments?.length || 0})</div>${profile.segments?.map((s) => s.name).join(', ') || 'None'}</div>
+      <div class="pv-section"><div class="pv-label">Approval Chain (${profile.approvalChain?.length || 0} steps)</div>${profile.approvalChain?.map((s) => s.role).join(' → ') || 'None'}</div>
+      <div class="pv-section"><div class="pv-label">Legal Rules (${profile.legalSLA?.specialRules?.length || 0})</div>${profile.legalSLA?.specialRules?.slice(0, 3).join('; ') || 'None'}${(profile.legalSLA?.specialRules?.length || 0) > 3 ? '...' : ''}</div>
+    `;
+
+    // Show editable JSON
+    document.getElementById('profileJson').value = JSON.stringify(profile, null, 2);
+
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    updateGenStep(aiStep, 'done');
+    updateGenStep(segStep, 'done');
+    updateGenStep(finalStep, 'done');
+    // Fall back to step 1
+    await sleep(2000);
+    showProfileStep(1);
+  }
 }
 
 /* ── Init ── */
@@ -1107,8 +1364,9 @@ async function init() {
   if (customerNameEl) customerNameEl.textContent = AEM_ORG.name;
   if (customerMetaEl) customerMetaEl.innerHTML = `&bull; ${AEM_ORG.tier} &bull; ${AEM_ORG.env}`;
 
-  // Build org selector in settings
+  // Build org selector and profile generator
   buildOrgSelector();
+  initProfileGenerator();
 
   // Load hidden preview frame for page context
   loadPreview();

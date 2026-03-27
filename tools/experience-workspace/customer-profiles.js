@@ -321,6 +321,36 @@ You are working with **Princess Cruises** (princess.com).
   },
 };
 
+/* ── Dynamic Profile Storage ── */
+const CUSTOM_PROFILES_KEY = 'ew-custom-profiles';
+
+function loadCustomProfiles() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PROFILES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveCustomProfiles(profiles) {
+  localStorage.setItem(CUSTOM_PROFILES_KEY, JSON.stringify(profiles));
+}
+
+export function addCustomProfile(profile) {
+  const customs = loadCustomProfiles();
+  customs[profile.id] = profile;
+  saveCustomProfiles(customs);
+}
+
+export function deleteCustomProfile(profileId) {
+  const customs = loadCustomProfiles();
+  delete customs[profileId];
+  saveCustomProfiles(customs);
+}
+
+function getAllProfiles() {
+  return { ...PROFILES, ...loadCustomProfiles() };
+}
+
 /* ── Profile Management ── */
 
 export function getActiveProfileId() {
@@ -328,20 +358,23 @@ export function getActiveProfileId() {
 }
 
 export function setActiveProfile(profileId) {
-  if (!PROFILES[profileId]) throw new Error(`Unknown profile: ${profileId}`);
+  const all = getAllProfiles();
+  if (!all[profileId]) throw new Error(`Unknown profile: ${profileId}`);
   localStorage.setItem(STORAGE_KEY, profileId);
 }
 
 export function getActiveProfile() {
-  return PROFILES[getActiveProfileId()] || PROFILES['aem-xsc'];
+  const all = getAllProfiles();
+  return all[getActiveProfileId()] || PROFILES['aem-xsc'];
 }
 
 export function listProfiles() {
-  return Object.values(PROFILES).map((p) => ({
+  return Object.values(getAllProfiles()).map((p) => ({
     id: p.id,
     name: p.name,
     vertical: p.vertical,
     tier: p.tier,
+    isCustom: !PROFILES[p.id],
   }));
 }
 
@@ -431,4 +464,107 @@ export function buildCustomerContext() {
   }
 
   return parts.join('\n');
+}
+
+/* ── AI Profile Generation Prompt ── */
+/* Given discovery notes + scraped site data, generate a complete customer profile */
+
+export const PROFILE_GENERATION_PROMPT = `You are an AI-powered customer onboarding agent for Adobe Experience Manager XSC (Experience Success Consulting).
+
+Given discovery call notes and/or a website analysis, generate a complete customer profile JSON object.
+
+Return ONLY valid JSON (no markdown fences, no explanation) matching this exact structure:
+
+{
+  "id": "kebab-case-id",
+  "name": "Company Name",
+  "orgId": "github-org-id",
+  "repo": "eds-repo-name",
+  "branch": "main",
+  "tier": "AEM CS + EDS",
+  "env": "Prod",
+  "services": ["EDS", "Assets Content Hub", "Sites"],
+  "vertical": "Industry / Sub-industry",
+  "sourceUrl": "https://their-site.com",
+
+  "brandVoice": {
+    "tone": "3-5 word tone description",
+    "keywords": ["brand", "keywords", "they", "use"],
+    "avoided": ["words", "they", "avoid"],
+    "style": "One sentence describing their communication style",
+    "colorPalette": {
+      "primary": "#hex",
+      "secondary": "#hex",
+      "accent": "#hex",
+      "background": "#hex",
+      "text": "#hex"
+    },
+    "typography": {
+      "heading": "Font Family, fallback",
+      "body": "Font Family, fallback"
+    }
+  },
+
+  "segments": [
+    { "name": "Segment Name", "id": "segment-id", "description": "Who they are and what they want" }
+  ],
+
+  "approvalChain": [
+    { "role": "Role Name", "action": "What they do in the workflow", "sla": "24h" }
+  ],
+
+  "legalSLA": {
+    "reviewTime": "48h",
+    "escalation": "72h",
+    "autoApprove": false,
+    "specialRules": ["Specific legal/compliance rules for this customer"]
+  },
+
+  "damTaxonomy": {
+    "root": "/content/dam/customer-name",
+    "folders": ["category1", "category2"],
+    "namingConvention": "prefix-[category]-[description]-[year]"
+  },
+
+  "entitlements": {
+    "analytics": { "name": "Adobe Analytics", "mcp": "AA MCP", "status": "active", "note": "Configuration note" },
+    "cja": { "name": "Customer Journey Analytics", "mcp": "CJA MCP", "status": "active", "note": "Note" },
+    "aep": { "name": "Adobe Experience Platform", "mcp": "AEP MCP", "status": "active", "note": "Note" },
+    "target": { "name": "Adobe Target", "mcp": "Target MCP", "status": "active", "note": "Note" },
+    "aemContent": { "name": "AEM Content", "mcp": "AEM Content MCP", "status": "live", "note": "Note" },
+    "workfront": { "name": "Workfront", "mcp": "Workfront WOA", "status": "active", "note": "Note" }
+  },
+
+  "mcpCapabilities": [
+    { "capability": "AEM content read/write", "mcp": "AEM Content MCP", "ready": true },
+    { "capability": "Analytics queries", "mcp": "AA MCP", "ready": false, "needs": "Report suite ID" }
+  ],
+
+  "systemPromptExtras": "Multi-line string with customer-specific context that the AI should know. Include site structure, key business context, competitive landscape, and what success looks like for this customer."
+}
+
+RULES:
+- Extract brand colors from CSS/design if website data is provided
+- Extract typography from CSS if available
+- Infer audience segments from site content and discovery notes
+- Build realistic approval chains based on the customer's industry and size
+- Include industry-specific legal/compliance rules
+- Set entitlement statuses based on what the customer actually has (from discovery notes)
+- The systemPromptExtras should be rich — include everything an AI agent would need to know to sound like an insider
+- If information is missing, make informed inferences based on the industry and company size
+- orgId should be a reasonable GitHub org slug
+- repo should be a reasonable EDS repo name`;
+
+export function buildProfilePrompt(discoveryNotes, siteData) {
+  const parts = [PROFILE_GENERATION_PROMPT];
+
+  if (discoveryNotes) {
+    parts.push(`\n\n## Discovery Call Notes\n${discoveryNotes}`);
+  }
+
+  if (siteData) {
+    parts.push(`\n\n## Website Analysis\n${siteData}`);
+  }
+
+  return parts.join('');
 }
