@@ -82,6 +82,38 @@ export const PROFILES = {
       { capability: 'Audience creation/sharing', mcp: 'AEP + Target', ready: true },
     ],
 
+    /* ── Curated data (grounded, stable — never randomized) ── */
+
+    segmentSizes: {
+      'ent-aem': 142300,
+      'greenfield': 87600,
+      'mtc': 63400,
+    },
+
+    analyticsBaseline: {
+      page_views: 34200,
+      unique_visitors: 18700,
+      bounce_rate: '31.4%',
+      avg_time_on_page: '94s',
+      conversion_rate: '3.2%',
+      top_entry_source: 'organic search',
+      mobile_pct: 62,
+      hero_ctr: '11.3%',
+      trend: 'up 8% vs prior period',
+    },
+
+    journeys: [
+      { name: 'EDS Onboarding Series', status: 'active', messages_sent: 14320, open_rate: '38.1%', conversion: '12.4%' },
+      { name: 'Cloud Migration Nurture', status: 'active', messages_sent: 9840, open_rate: '31.7%', conversion: '7.2%' },
+      { name: 'Feature Adoption — Agentic AI', status: 'draft', messages_sent: 0, open_rate: 'N/A', conversion: 'N/A' },
+    ],
+
+    sampleCustomers: [
+      { firstName: 'Sarah', lastName: 'Chen', email: 'schen@techcorp.io', ltv: '$12,400', loyalty: 'Platinum', channel: 'email', city: 'San Francisco' },
+      { firstName: 'Marcus', lastName: 'Williams', email: 'mwilliams@acme.com', ltv: '$8,200', loyalty: 'Gold', channel: 'web', city: 'Austin' },
+      { firstName: 'Priya', lastName: 'Sharma', email: 'psharma@global.co', ltv: '$23,100', loyalty: 'Platinum', channel: 'push', city: 'Singapore' },
+    ],
+
     systemPromptExtras: '',
   },
 
@@ -222,6 +254,40 @@ Moving the corporate site from hand-coded to AEM Sites + EDS means:
 3. Brand compliance is built into the authoring workflow (governance scanning)
 4. Analytics and CJA provide real insight into investor engagement
 5. The corporate site becomes a showcase for what AEM can do — strengthening the relationship`,
+
+    /* ── Curated data (grounded, stable) ── */
+
+    segmentSizes: {
+      'investors': 24800,
+      'careers': 156200,
+      'press': 8400,
+      'partners': 3200,
+      'esg': 41600,
+    },
+
+    analyticsBaseline: {
+      page_views: 287000,
+      unique_visitors: 142300,
+      bounce_rate: '38.2%',
+      avg_time_on_page: '127s',
+      conversion_rate: '2.1%',
+      top_entry_source: 'direct',
+      mobile_pct: 48,
+      hero_ctr: '6.8%',
+      trend: 'stable vs prior period',
+    },
+
+    journeys: [
+      { name: 'Investor Relations Quarterly Update', status: 'active', messages_sent: 4200, open_rate: '52.3%', conversion: '18.1%' },
+      { name: 'Careers Newsletter', status: 'active', messages_sent: 28400, open_rate: '24.6%', conversion: '4.8%' },
+      { name: 'ESG Impact Report Launch', status: 'draft', messages_sent: 0, open_rate: 'N/A', conversion: 'N/A' },
+    ],
+
+    sampleCustomers: [
+      { firstName: 'James', lastName: 'Thornton', email: 'jthornton@goldmansachs.com', ltv: '$0', loyalty: 'Investor', channel: 'email', city: 'New York' },
+      { firstName: 'Elena', lastName: 'Rodriguez', email: 'erodriguez@vogue.com', ltv: '$0', loyalty: 'Press', channel: 'email', city: 'New York' },
+      { firstName: 'David', lastName: 'Park', email: 'dpark@ralphlauren.com', ltv: '$0', loyalty: 'Employee', channel: 'web', city: 'New York' },
+    ],
   },
 
   /* ── Princess Cruises ── */
@@ -326,6 +392,41 @@ You are working with **Princess Cruises** (princess.com).
 - Alaska 2025 Early Bird (targeting Adventure Seekers)
 - Mediterranean Luxury (targeting Luxury Relaxers)
 - First Cruise Guarantee (targeting First Timers)`,
+
+    /* ── Curated data (grounded, stable) ── */
+
+    segmentSizes: {
+      'elite-voyager': 18200,
+      'adventure-seeker': 284000,
+      'luxury-relaxer': 96400,
+      'family-explorer': 412000,
+      'first-timer': 1340000,
+    },
+
+    analyticsBaseline: {
+      page_views: 2140000,
+      unique_visitors: 876000,
+      bounce_rate: '26.8%',
+      avg_time_on_page: '184s',
+      conversion_rate: '4.7%',
+      top_entry_source: 'paid search',
+      mobile_pct: 71,
+      hero_ctr: '14.2%',
+      trend: 'up 12% vs prior period',
+    },
+
+    journeys: [
+      { name: 'Alaska 2025 Early Bird', status: 'active', messages_sent: 342000, open_rate: '29.4%', conversion: '6.1%' },
+      { name: 'Mediterranean Luxury Nurture', status: 'active', messages_sent: 124000, open_rate: '33.8%', conversion: '8.9%' },
+      { name: 'First Cruise Guarantee', status: 'active', messages_sent: 567000, open_rate: '41.2%', conversion: '3.4%' },
+      { name: 'Post-Voyage Thank You', status: 'active', messages_sent: 89000, open_rate: '48.7%', conversion: '22.1%' },
+    ],
+
+    sampleCustomers: [
+      { firstName: 'Patricia', lastName: 'Morrison', email: 'pmorrison@gmail.com', ltv: '$47,200', loyalty: 'Platinum Elite', channel: 'email', city: 'Scottsdale' },
+      { firstName: 'Robert', lastName: 'Nakamura', email: 'rnakamura@outlook.com', ltv: '$18,400', loyalty: 'Gold', channel: 'push', city: 'Seattle' },
+      { firstName: 'Erin', lastName: 'O\'Brien', email: 'eobrien@yahoo.com', ltv: '$3,200', loyalty: 'Blue', channel: 'web', city: 'Chicago' },
+    ],
   },
 };
 

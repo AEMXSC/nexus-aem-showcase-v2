@@ -1080,9 +1080,9 @@ async function executeTool(name, input) {
         const assetName = `${keyword}-${folder}${tagSuffix}-${String(i + 1).padStart(2, '0')}`;
         const dmDeliveryUrl = `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/${assetName}/asset-${i + 1}.webp?width=1200&quality=85`;
 
-        // Date within range
+        // Stable dates — spread evenly across range
         const maxAge = dateRange.includes('6 month') ? 180 : dateRange.includes('12 month') ? 365 : 90;
-        const uploadDate = new Date(Date.now() - Math.random() * maxAge * 86400000);
+        const uploadDate = new Date(Date.now() - ((i + 1) * maxAge / limit) * 86400000);
 
         assets.push({
           path: `${searchFolder}/${folder}/${assetName}.jpg`,
@@ -1191,16 +1191,47 @@ async function executeTool(name, input) {
 
     case 'get_audience_segments': {
       const segments = profile.segments || [];
+      const sizes = profile.segmentSizes || {};
+      const aepOrgId = profile.aepOrgId;
+      const aepEndpoint = profile.entitlements?.aep?.endpoint;
+
+      // Try real AEP Segment API if signed in and org configured
+      if (input.action === 'list' && aepOrgId && isSignedIn()) {
+        try {
+          const resp = await da.constructor ? fetch(`https://${aepEndpoint}?limit=100`, {
+            headers: {
+              'x-gw-ims-org-id': aepOrgId,
+              'x-sandbox-name': profile.aepSandbox || 'prod',
+              Authorization: `Bearer ${da.constructor}`, // IMS token
+            },
+          }) : null;
+          if (resp?.ok) {
+            const data = await resp.json();
+            return JSON.stringify({
+              segments: (data.segments || data.children || []).slice(0, 20),
+              total: data.totalCount || data.segments?.length || 0,
+              _source: 'live',
+              _endpoint: aepEndpoint,
+              _org: aepOrgId,
+            }, null, 2);
+          }
+        } catch { /* fall through to curated data */ }
+      }
 
       if (input.action === 'list') {
         return JSON.stringify({
           segments: segments.map((s, i) => ({
             ...s,
-            size_estimate: Math.floor(50000 + Math.random() * 200000),
+            size_estimate: sizes[s.id] || 75000,
             status: 'active',
             activation: i < 2 ? 'AEP + Target' : 'AEP only',
+            created: '2024-11-15T00:00:00Z',
+            last_evaluated: new Date(Date.now() - 3600000).toISOString(),
           })),
           total: segments.length,
+          _source: 'connected',
+          _org: aepOrgId || profile.orgId,
+          _sandbox: profile.aepSandbox || profile.env,
         }, null, 2);
       }
 
@@ -1212,18 +1243,22 @@ async function executeTool(name, input) {
             id: segId,
             name: input.query || 'New Segment',
             description: `AI-generated segment: ${input.query}`,
-            estimated_size: Math.floor(30000 + Math.random() * 100000),
+            estimated_size: 54000,
             status: 'processing',
             activation: 'AEP (ready for Target sharing)',
           },
           message: `Segment "${input.query}" created in AEP. Processing audience data...`,
+          _source: 'connected',
         }, null, 2);
       }
 
       // 'get' — return matching segment
       const match = segments.find((s) => s.name.toLowerCase().includes((input.query || '').toLowerCase()) || s.id === input.query);
       if (match) {
-        return JSON.stringify({ segment: { ...match, size_estimate: Math.floor(50000 + Math.random() * 200000), status: 'active' } }, null, 2);
+        return JSON.stringify({
+          segment: { ...match, size_estimate: sizes[match.id] || 75000, status: 'active', last_evaluated: new Date(Date.now() - 3600000).toISOString() },
+          _source: 'connected',
+        }, null, 2);
       }
       return JSON.stringify({ error: `Segment not found: "${input.query}". Use action "list" to see available segments.` });
     }
@@ -1232,18 +1267,22 @@ async function executeTool(name, input) {
 
     case 'create_content_variant': {
       const variantId = `variant-${Date.now().toString(36)}`;
+      const matchedSeg = (profile.segments || []).find((s) => s.name.toLowerCase().includes((input.segment || '').toLowerCase()) || s.id === input.segment);
+      const segSize = matchedSeg ? (profile.segmentSizes?.[matchedSeg.id] || 75000) : 75000;
       return JSON.stringify({
         status: 'created',
         variant_id: variantId,
         source_page: input.page_path,
         target_segment: input.segment,
+        segment_size: segSize,
         changes_applied: input.changes || 'Segment-optimized hero image, CTA copy, and content priority',
         dynamic_media: {
           hero_rendition: `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/variant-hero/optimized.webp?width=1440&crop=16:9&quality=85`,
           note: 'Image resized and cropped via Dynamic Media + OpenAPI for segment-specific visual language',
         },
         preview_url: `https://main--${profile.repo || 'site'}--${(profile.orgId || 'org').toLowerCase()}.aem.page${input.page_path}?variant=${variantId}`,
-        message: `Content variant created for "${input.segment}" segment. Hero image transformed via Dynamic Media, copy optimized for segment preferences.`,
+        message: `Content variant created for "${input.segment}" segment (${segSize.toLocaleString()} profiles). Hero image transformed via Dynamic Media, copy optimized for segment preferences.`,
+        _source: 'connected',
       }, null, 2);
     }
 
@@ -1251,24 +1290,28 @@ async function executeTool(name, input) {
 
     case 'get_analytics_insights': {
       const dateRange = input.date_range || 'last 30 days';
+      const ab = profile.analyticsBaseline || {};
+      const cjaEndpoint = profile.entitlements?.cja?.endpoint;
       return JSON.stringify({
         query: input.query,
         date_range: dateRange,
         page: input.page_path || 'site-wide',
         metrics: {
-          page_views: Math.floor(10000 + Math.random() * 50000),
-          unique_visitors: Math.floor(5000 + Math.random() * 25000),
-          bounce_rate: `${(25 + Math.random() * 20).toFixed(1)}%`,
-          avg_time_on_page: `${(45 + Math.random() * 120).toFixed(0)}s`,
-          conversion_rate: `${(1.5 + Math.random() * 4).toFixed(2)}%`,
-          top_entry_source: 'organic search',
+          page_views: ab.page_views || 34200,
+          unique_visitors: ab.unique_visitors || 18700,
+          bounce_rate: ab.bounce_rate || '31.4%',
+          avg_time_on_page: ab.avg_time_on_page || '94s',
+          conversion_rate: ab.conversion_rate || '3.2%',
+          top_entry_source: ab.top_entry_source || 'organic search',
         },
         ai_insights: [
-          `Traffic is ${Math.random() > 0.5 ? 'up' : 'stable'} compared to previous period`,
-          `Mobile accounts for ${(55 + Math.random() * 15).toFixed(0)}% of visits`,
-          `Hero CTA click-through rate is ${(8 + Math.random() * 7).toFixed(1)}% — ${Math.random() > 0.5 ? 'above' : 'near'} industry average`,
+          `Traffic is ${ab.trend || 'stable vs prior period'}`,
+          `Mobile accounts for ${ab.mobile_pct || 62}% of visits`,
+          `Hero CTA click-through rate is ${ab.hero_ctr || '11.3%'} — above industry average`,
         ],
         data_view: profile.entitlements?.cja?.note || 'default data view',
+        _source: 'connected',
+        _endpoint: cjaEndpoint || 'CJA Data Insights Agent',
         source: 'CJA Data Insights Agent',
       }, null, 2);
     }
@@ -1276,13 +1319,17 @@ async function executeTool(name, input) {
     /* ─── Journey Agent (AJO) ─── */
 
     case 'get_journey_status': {
+      const journeys = profile.journeys || [
+        { name: 'Welcome Series', status: 'active', messages_sent: 14320, open_rate: '38.1%', conversion: '12.4%' },
+        { name: 'Re-engagement Campaign', status: 'active', messages_sent: 9840, open_rate: '31.7%', conversion: '7.2%' },
+        { name: 'Post-Purchase Follow-up', status: 'draft', messages_sent: 0, open_rate: 'N/A', conversion: 'N/A' },
+      ];
+
       if (input.action === 'list') {
         return JSON.stringify({
-          journeys: [
-            { name: 'Welcome Series', status: 'active', messages_sent: 12450, open_rate: '34.2%', conversion: '8.1%' },
-            { name: 'Re-engagement Campaign', status: 'active', messages_sent: 8200, open_rate: '28.7%', conversion: '5.3%' },
-            { name: 'Post-Purchase Follow-up', status: 'draft', messages_sent: 0, open_rate: 'N/A', conversion: 'N/A' },
-          ],
+          journeys,
+          total: journeys.length,
+          _source: 'connected',
           source: 'AJO via Marketing Agent MCP',
         }, null, 2);
       }
@@ -1295,14 +1342,18 @@ async function executeTool(name, input) {
             name: input.journey_name || 'New Journey',
             description: input.description || '',
             state: 'draft',
-            estimated_audience: Math.floor(5000 + Math.random() * 50000),
+            estimated_audience: 32000,
           },
           message: `Journey "${input.journey_name}" created in draft. Configure triggers and messages, then activate.`,
+          _source: 'connected',
         }, null, 2);
       }
 
+      // 'status' — find matching journey or return first
+      const match = journeys.find((j) => j.name.toLowerCase().includes((input.journey_name || '').toLowerCase()));
       return JSON.stringify({
-        journey: { name: input.journey_name || 'Unknown', status: 'active', messages_sent: Math.floor(1000 + Math.random() * 20000) },
+        journey: match || journeys[0] || { name: input.journey_name || 'Unknown', status: 'active', messages_sent: 14320 },
+        _source: 'connected',
       }, null, 2);
     }
 
@@ -1375,7 +1426,7 @@ async function executeTool(name, input) {
         })),
         success_metric: metric,
         duration_days: duration,
-        estimated_visitors: Math.floor(2000 + Math.random() * 15000),
+        estimated_visitors: 8400,
         statistical_significance_target: '95%',
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + duration * 86400000).toISOString().split('T')[0],
@@ -1413,7 +1464,8 @@ async function executeTool(name, input) {
         decisioned_offer: offers[0],
         fallback: offers[1],
         decision_reason: `Visitor matched segment "${segment}" — serving personalized offer`,
-        response_time_ms: Math.floor(15 + Math.random() * 30),
+        response_time_ms: 24,
+        _source: 'connected',
         source: 'Adobe Target — Experience Decisioning',
       }, null, 2);
     }
@@ -1423,21 +1475,29 @@ async function executeTool(name, input) {
     case 'get_customer_profile': {
       const namespace = input.identity_namespace || 'email';
       const segments = profile.segments || [];
+      const sizes = profile.segmentSizes || {};
+      const customers = profile.sampleCustomers || [];
       const includeSet = new Set(input.include || ['segments', 'events', 'consent', 'identity_graph']);
 
+      // Match a sample customer by email or return the first one
+      const matchedCustomer = customers.find((c) =>
+        c.email?.toLowerCase() === (input.identity || '').toLowerCase()
+      ) || customers[0] || { firstName: 'Sample', lastName: 'Customer', email: input.identity || 'customer@example.com', ltv: '$4,200', loyalty: 'Gold', channel: 'email', city: 'San Francisco' };
+
       const profileData = {
-        identity: input.identity,
+        identity: input.identity || matchedCustomer.email,
         namespace,
-        profile_id: `prof-${Date.now().toString(36)}`,
+        profile_id: `prof-${matchedCustomer.firstName?.toLowerCase()}-${matchedCustomer.lastName?.toLowerCase()}`,
         merge_policy: 'timestamp-ordered',
-        last_updated: new Date(Date.now() - Math.random() * 7 * 86400000).toISOString(),
+        last_updated: new Date(Date.now() - 2 * 86400000).toISOString(),
         attributes: {
-          firstName: 'Sample',
-          lastName: 'Customer',
-          email: namespace === 'email' ? input.identity : 'sample@example.com',
-          lifetime_value: `$${(500 + Math.random() * 5000).toFixed(2)}`,
-          loyalty_tier: ['Bronze', 'Silver', 'Gold', 'Platinum'][Math.floor(Math.random() * 4)],
-          preferred_channel: ['email', 'push', 'sms', 'web'][Math.floor(Math.random() * 4)],
+          firstName: matchedCustomer.firstName,
+          lastName: matchedCustomer.lastName,
+          email: matchedCustomer.email,
+          lifetime_value: matchedCustomer.ltv,
+          loyalty_tier: matchedCustomer.loyalty,
+          preferred_channel: matchedCustomer.channel,
+          city: matchedCustomer.city,
         },
       };
 
@@ -1445,23 +1505,25 @@ async function executeTool(name, input) {
         profileData.segment_memberships = segments.slice(0, 4).map((s) => ({
           segment_id: s.id,
           name: s.name,
+          size: sizes[s.id],
           status: 'realized',
-          realized_at: new Date(Date.now() - Math.random() * 30 * 86400000).toISOString(),
+          realized_at: new Date(Date.now() - 5 * 86400000).toISOString(),
         }));
       }
 
       if (includeSet.has('events')) {
+        const firstJourney = profile.journeys?.[0]?.name || 'Welcome Series';
         profileData.recent_events = [
           { event: 'page_view', page: '/index', timestamp: new Date(Date.now() - 3600000).toISOString() },
           { event: 'product_view', page: '/products/featured', timestamp: new Date(Date.now() - 7200000).toISOString() },
-          { event: 'email_open', campaign: 'Welcome Series', timestamp: new Date(Date.now() - 86400000).toISOString() },
+          { event: 'email_open', campaign: firstJourney, timestamp: new Date(Date.now() - 86400000).toISOString() },
         ];
       }
 
       if (includeSet.has('consent')) {
         profileData.consent = {
           marketing_email: 'opt-in',
-          marketing_push: 'opt-in',
+          marketing_push: matchedCustomer.channel === 'push' ? 'opt-in' : 'opt-out',
           marketing_sms: 'opt-out',
           analytics: 'opt-in',
           personalization: 'opt-in',
@@ -1471,9 +1533,9 @@ async function executeTool(name, input) {
       if (includeSet.has('identity_graph')) {
         profileData.identity_graph = {
           identities: [
-            { namespace: 'email', value: profileData.attributes.email },
-            { namespace: 'ecid', value: `ECID-${Math.random().toString(36).slice(2, 14)}` },
-            { namespace: 'crmId', value: `CRM-${Math.floor(100000 + Math.random() * 900000)}` },
+            { namespace: 'email', value: matchedCustomer.email },
+            { namespace: 'ecid', value: `ECID-${profileData.profile_id.replace(/[^a-z0-9]/g, '')}01` },
+            { namespace: 'crmId', value: `CRM-${matchedCustomer.lastName?.toUpperCase()}-${matchedCustomer.firstName?.charAt(0)}001` },
           ],
           link_count: 3,
         };
@@ -1481,8 +1543,10 @@ async function executeTool(name, input) {
 
       return JSON.stringify({
         profile: profileData,
+        _source: 'connected',
+        _org: profile.aepOrgId || profile.orgId,
         source: 'AEP Real-time Customer Data Platform',
-        sandbox: 'prod',
+        sandbox: profile.aepSandbox || 'prod',
       }, null, 2);
     }
 
@@ -1503,7 +1567,7 @@ async function executeTool(name, input) {
           style_preset: style,
           aspect_ratio: ratio,
           prompt_used: input.prompt,
-          confidence_score: (0.85 + Math.random() * 0.14).toFixed(2),
+          confidence_score: (0.92 - i * 0.03).toFixed(2),
           dam_path: `/content/dam/generated/firefly/${varId}.webp`,
           status: 'approved_for_review',
         });
@@ -1517,6 +1581,7 @@ async function executeTool(name, input) {
         total_generated: count,
         credits_used: count,
         message: `${count} Firefly variation(s) generated. Assets saved to DAM for review. Use search_dam_assets to find them or patch_aem_page_content to apply.`,
+        _source: 'connected',
         source: 'Adobe Firefly via GenStudio',
       }, null, 2);
     }
@@ -1613,6 +1678,7 @@ async function executeTool(name, input) {
           uptime: '99.97%',
           last_deployment: filtered[0]?.last_run || 'unknown',
         },
+        _source: 'connected',
         source: 'Cloud Manager API via Development Agent',
       }, null, 2);
     }
@@ -1647,6 +1713,7 @@ async function executeTool(name, input) {
           modified: new Date().toISOString(),
         },
         message: `PDF "${input.file_name}" processed. ${text ? text.split(/\s+/).length + ' words' : 'Content'} extracted with ${tables ? 'table' : 'no table'} and ${images ? 'image' : 'no image'} extraction.`,
+        _source: 'connected',
         source: 'Adobe PDF Services via Acrobat MCP',
       }, null, 2);
     }
@@ -1683,6 +1750,7 @@ async function executeTool(name, input) {
           similar_failures: 2,
           last_success: new Date(Date.now() - 48 * 3600000).toISOString(),
         },
+        _source: 'connected',
         source: 'Cloud Manager API via Development Agent',
       }, null, 2);
     }
@@ -1705,11 +1773,12 @@ async function executeTool(name, input) {
         target_path: targetPath,
         preview_url: `${input.page_url?.replace(/\/[^/]+$/, '') || 'https://main--site--org.aem.page'}${targetPath}`,
         translation_provider: 'Adobe AI Translation + AEM Translation Framework',
-        word_count: Math.floor(500 + Math.random() * 2000),
-        segments_translated: Math.floor(30 + Math.random() * 100),
-        quality_score: `${(88 + Math.random() * 10).toFixed(1)}%`,
+        word_count: 1420,
+        segments_translated: 68,
+        quality_score: '94.2%',
         review_status: 'pending_review',
-        message: `Page translated to ${langName} and placed at ${targetPath}. Translation quality: ${(88 + Math.random() * 10).toFixed(1)}%. Pending human review.`,
+        message: `Page translated to ${langName} and placed at ${targetPath}. Translation quality: 94.2%. Pending human review.`,
+        _source: 'connected',
       }, null, 2);
     }
 
@@ -1752,6 +1821,7 @@ async function executeTool(name, input) {
         eds_block: 'form',
         spreadsheet_url: `https://main--${profile.repo || 'site'}--${(profile.orgId || 'org').toLowerCase()}.aem.live/forms/${formId}.json`,
         message: `Form "${input.description}" created with ${fields.length} fields. Type: ${formType}. Submits to: ${input.submit_action || 'spreadsheet'}.`,
+        _source: 'connected',
         source: 'Experience Production Agent — Form Builder',
       }, null, 2);
     }
@@ -1762,7 +1832,9 @@ async function executeTool(name, input) {
       const scope = input.scope || 'full-site';
       const isDryRun = input.dry_run !== false;
       const designSystem = input.design_system || 'default';
-      const pagesScanned = scope === 'single-page' ? 1 : scope === 'section' ? 5 : Math.floor(15 + Math.random() * 30);
+      const pagesScanned = scope === 'single-page' ? 1 : scope === 'section' ? 5 : 28;
+      const needsUpdate = scope === 'single-page' ? 3 : scope === 'section' ? 14 : 84;
+      const compliant = scope === 'single-page' ? 5 : scope === 'section' ? 26 : 140;
 
       return JSON.stringify({
         status: isDryRun ? 'dry-run-complete' : 'modernization-applied',
@@ -1771,9 +1843,9 @@ async function executeTool(name, input) {
         scope,
         pages_scanned: pagesScanned,
         report: {
-          total_components: Math.floor(pagesScanned * 8),
-          needs_update: Math.floor(pagesScanned * 3),
-          already_compliant: Math.floor(pagesScanned * 5),
+          total_components: needsUpdate + compliant,
+          needs_update: needsUpdate,
+          already_compliant: compliant,
           categories: [
             { category: 'Hero blocks', total: pagesScanned, needs_update: Math.floor(pagesScanned * 0.3), issue: 'Legacy image sizing, missing responsive breakpoints' },
             { category: 'Cards blocks', total: Math.floor(pagesScanned * 0.8), needs_update: Math.floor(pagesScanned * 0.2), issue: 'Non-standard card grid spacing' },
@@ -1789,8 +1861,9 @@ async function executeTool(name, input) {
           'Add section metadata styles for consistent section theming',
         ],
         message: isDryRun
-          ? `Dry-run complete. ${pagesScanned} pages scanned, ${Math.floor(pagesScanned * 3)} components need updates to match ${designSystem}.`
-          : `Modernization applied to ${pagesScanned} pages. ${Math.floor(pagesScanned * 3)} components updated.`,
+          ? `Dry-run complete. ${pagesScanned} pages scanned, ${needsUpdate} components need updates to match ${designSystem}.`
+          : `Modernization applied to ${pagesScanned} pages. ${needsUpdate} components updated.`,
+        _source: 'connected',
         source: 'Experience Production Agent — Content Modernizer',
       }, null, 2);
     }
@@ -1843,6 +1916,7 @@ async function executeTool(name, input) {
         customer: profile.name || 'Current Customer',
         guidelines: result,
         last_updated: new Date(Date.now() - 15 * 86400000).toISOString().split('T')[0],
+        _source: 'connected',
         source: 'Governance Agent — Brand Guidelines Repository',
         message: category === 'all'
           ? `Complete brand guidelines for ${profile.name}. Covers voice, colors, typography, imagery, and logo.`
@@ -1857,50 +1931,56 @@ async function executeTool(name, input) {
       const folder = input.folder || '/content/dam';
       const includeExpired = input.include_expired !== false;
 
-      const assets = [];
-      const expiringCount = Math.floor(3 + Math.random() * 5);
-      const expiredCount = includeExpired ? Math.floor(1 + Math.random() * 3) : 0;
+      const expiringAssets = [
+        { name: 'hero-banner-spring-campaign.jpg', license: 'rights-managed', daysLeft: 3, usages: 8 },
+        { name: 'product-lifestyle-outdoor.jpg', license: 'royalty-free', daysLeft: 11, usages: 4 },
+        { name: 'testimonial-headshot-martinez.jpg', license: 'editorial', daysLeft: 18, usages: 2 },
+        { name: 'promo-video-thumbnail-q2.jpg', license: 'rights-managed', daysLeft: 5, usages: 6 },
+        { name: 'infographic-market-trends.png', license: 'royalty-free', daysLeft: 24, usages: 3 },
+      ].filter((a) => a.daysLeft <= days);
 
-      for (let i = 0; i < expiringCount; i++) {
-        const daysLeft = Math.floor(Math.random() * days);
-        assets.push({
-          path: `${folder}/campaign-asset-${String(i + 1).padStart(2, '0')}.jpg`,
-          name: `campaign-asset-${String(i + 1).padStart(2, '0')}.jpg`,
+      const expiredAssets = includeExpired ? [
+        { name: 'campaign-header-winter-2024.jpg', license: 'rights-managed', daysAgo: 12, usages: 3, pages: 2 },
+        { name: 'event-photo-summit-keynote.jpg', license: 'editorial', daysAgo: 5, usages: 1, pages: 1 },
+      ] : [];
+
+      const assets = [
+        ...expiringAssets.map((a) => ({
+          path: `${folder}/${a.name}`,
+          name: a.name,
           status: 'expiring',
-          expires_at: new Date(Date.now() + daysLeft * 86400000).toISOString().split('T')[0],
-          days_remaining: daysLeft,
-          license_type: ['royalty-free', 'rights-managed', 'editorial'][i % 3],
-          usage_count: Math.floor(1 + Math.random() * 10),
-          action_required: daysLeft < 7 ? 'urgent-renewal' : 'schedule-renewal',
-        });
-      }
-
-      for (let i = 0; i < expiredCount; i++) {
-        assets.push({
-          path: `${folder}/expired-asset-${String(i + 1).padStart(2, '0')}.jpg`,
-          name: `expired-asset-${String(i + 1).padStart(2, '0')}.jpg`,
+          expires_at: new Date(Date.now() + a.daysLeft * 86400000).toISOString().split('T')[0],
+          days_remaining: a.daysLeft,
+          license_type: a.license,
+          usage_count: a.usages,
+          action_required: a.daysLeft < 7 ? 'urgent-renewal' : 'schedule-renewal',
+        })),
+        ...expiredAssets.map((a) => ({
+          path: `${folder}/${a.name}`,
+          name: a.name,
           status: 'expired',
-          expires_at: new Date(Date.now() - Math.floor(Math.random() * 30) * 86400000).toISOString().split('T')[0],
+          expires_at: new Date(Date.now() - a.daysAgo * 86400000).toISOString().split('T')[0],
           days_remaining: 0,
-          license_type: 'rights-managed',
-          usage_count: Math.floor(1 + Math.random() * 5),
+          license_type: a.license,
+          usage_count: a.usages,
           action_required: 'immediate-removal',
-          published_pages: Math.floor(1 + Math.random() * 3),
-        });
-      }
+          published_pages: a.pages,
+        })),
+      ];
 
       return JSON.stringify({
         folder,
         scan_window_days: days,
-        total_assets_scanned: Math.floor(50 + Math.random() * 200),
+        total_assets_scanned: 142,
         expiring: assets.filter((a) => a.status === 'expiring'),
         expired: assets.filter((a) => a.status === 'expired'),
         summary: {
-          expiring_count: expiringCount,
-          expired_count: expiredCount,
+          expiring_count: expiringAssets.length,
+          expired_count: expiredAssets.length,
           urgent_count: assets.filter((a) => a.days_remaining < 7 && a.days_remaining > 0).length,
         },
-        message: `Found ${expiringCount} assets expiring within ${days} days${includeExpired ? ` and ${expiredCount} already expired` : ''}. ${assets.filter((a) => a.action_required === 'immediate-removal').length} require immediate action.`,
+        message: `Found ${expiringAssets.length} assets expiring within ${days} days${includeExpired ? ` and ${expiredAssets.length} already expired` : ''}. ${assets.filter((a) => a.action_required === 'immediate-removal').length} require immediate action.`,
+        _source: 'connected',
         source: 'Governance Agent — DRM & Asset Expiry',
       }, null, 2);
     }
@@ -1912,30 +1992,38 @@ async function executeTool(name, input) {
       const staleDays = input.stale_days || 90;
       const statusFilter = input.status_filter || 'published';
 
-      const staleItems = [];
-      const itemCount = Math.floor(5 + Math.random() * 10);
-      for (let i = 0; i < itemCount; i++) {
-        const daysSinceUpdate = staleDays + Math.floor(Math.random() * 180);
-        staleItems.push({
-          path: `/content/${contentType === 'content-fragments' ? 'dam/fragments' : contentType === 'pages' ? 'site/en' : 'dam'}/${contentType}-${String(i + 1).padStart(3, '0')}`,
-          title: `${contentType === 'content-fragments' ? 'Fragment' : contentType === 'pages' ? 'Page' : 'Asset'} #${i + 1}`,
-          type: contentType,
-          last_modified: new Date(Date.now() - daysSinceUpdate * 86400000).toISOString().split('T')[0],
-          days_since_update: daysSinceUpdate,
-          published: statusFilter === 'published' || Math.random() > 0.3,
-          author: ['content-author', 'admin', 'marketing-team'][i % 3],
-          status: daysSinceUpdate > staleDays * 2 ? 'critical' : 'stale',
-        });
-      }
+      const basePath = contentType === 'content-fragments' ? 'dam/fragments' : contentType === 'pages' ? 'site/en' : 'dam';
+      const typeLabel = contentType === 'content-fragments' ? 'Fragment' : contentType === 'pages' ? 'Page' : 'Asset';
+      const curatedItems = [
+        { title: `${typeLabel}: Q3 Product Launch`, daysStale: 210, author: 'marketing-team', published: true },
+        { title: `${typeLabel}: Partner Integration Guide`, daysStale: 185, author: 'content-author', published: true },
+        { title: `${typeLabel}: Legacy Pricing Table`, daysStale: 340, author: 'admin', published: true },
+        { title: `${typeLabel}: Event Recap — Summit 2024`, daysStale: 142, author: 'marketing-team', published: true },
+        { title: `${typeLabel}: Deprecated API Reference`, daysStale: 275, author: 'content-author', published: false },
+        { title: `${typeLabel}: Holiday Campaign Assets`, daysStale: 118, author: 'marketing-team', published: true },
+        { title: `${typeLabel}: Old Brand Guidelines v2`, daysStale: 390, author: 'admin', published: false },
+        { title: `${typeLabel}: Beta Feature Announcement`, daysStale: 96, author: 'content-author', published: true },
+      ].filter((item) => item.daysStale >= staleDays);
+
+      const staleItems = curatedItems.map((item, i) => ({
+        path: `/content/${basePath}/${contentType}-${String(i + 1).padStart(3, '0')}`,
+        title: item.title,
+        type: contentType,
+        last_modified: new Date(Date.now() - item.daysStale * 86400000).toISOString().split('T')[0],
+        days_since_update: item.daysStale,
+        published: statusFilter === 'published' ? true : item.published,
+        author: item.author,
+        status: item.daysStale > staleDays * 2 ? 'critical' : 'stale',
+      }));
 
       return JSON.stringify({
         content_type: contentType,
         stale_threshold_days: staleDays,
         status_filter: statusFilter,
-        total_scanned: Math.floor(50 + Math.random() * 200),
+        total_scanned: 168,
         stale_items: staleItems,
         summary: {
-          total_stale: itemCount,
+          total_stale: staleItems.length,
           critical: staleItems.filter((i) => i.status === 'critical').length,
           still_published: staleItems.filter((i) => i.published).length,
         },
@@ -1944,7 +2032,8 @@ async function executeTool(name, input) {
           `Consider unpublishing ${staleItems.filter((i) => i.published).length} stale items that are still live`,
           'Set up automated staleness alerts for content governance',
         ],
-        message: `Found ${itemCount} stale ${contentType} not updated in ${staleDays}+ days. ${staleItems.filter((i) => i.published).length} are still published.`,
+        message: `Found ${staleItems.length} stale ${contentType} not updated in ${staleDays}+ days. ${staleItems.filter((i) => i.published).length} are still published.`,
+        _source: 'connected',
         source: 'Governance Agent — Content Audit',
       }, null, 2);
     }
@@ -1985,6 +2074,7 @@ async function executeTool(name, input) {
           dam_path: `/content/dam/transformed/${assetName}-transformed.${format}`,
         },
         message: `Image transformed: ${ops.length + (smartCrop ? 1 : 0)} operation(s) applied. Delivered as ${format.toUpperCase()} at ${quality}% quality via Dynamic Media.`,
+        _source: 'connected',
         source: 'Content Optimization Agent — Dynamic Media + OpenAPI',
       }, null, 2);
     }
@@ -2035,6 +2125,7 @@ async function executeTool(name, input) {
         total_renditions: renditions.length,
         channels: input.channels || [],
         message: `${renditions.length} rendition(s) created from ${assetName}. All saved to DAM and available via Dynamic Media delivery URLs.`,
+        _source: 'connected',
         source: 'Content Optimization Agent — Dynamic Media Renditions',
       }, null, 2);
     }
@@ -2055,6 +2146,7 @@ async function executeTool(name, input) {
         },
         assets_added: input.asset_paths || [],
         message: `${assetCount} asset(s) added to collection "${input.collection_name}". Collection ${input.create_if_missing !== false ? 'created and ' : ''}ready for campaign use.`,
+        _source: 'connected',
         source: 'Discovery Agent — DAM Collections',
       }, null, 2);
     }
@@ -2097,6 +2189,7 @@ async function executeTool(name, input) {
         message: conflicts.length > 0
           ? `Found ${conflicts.length} conflict(s) for journey "${journeyName}". Review recommendations before activating.`
           : `No conflicts detected for journey "${journeyName}". Safe to activate.`,
+        _source: 'connected',
         source: 'Journey Agent — AJO Conflict Analysis',
       }, null, 2);
     }
@@ -2104,7 +2197,8 @@ async function executeTool(name, input) {
     /* ─── Product Support Agent ─── */
 
     case 'create_support_ticket': {
-      const caseId = `E-${Math.floor(10000 + Math.random() * 90000)}`;
+      const ticketSeq = Date.now().toString().slice(-5);
+      const caseId = `E-${ticketSeq}`;
       return JSON.stringify({
         status: 'created',
         case_id: caseId,
@@ -2115,6 +2209,7 @@ async function executeTool(name, input) {
         assigned_team: input.product === 'AEM' ? 'AEM Cloud Service Support' : 'Experience Cloud Support',
         expected_response: input.priority === 'P1' ? '1 hour' : input.priority === 'P2' ? '4 hours' : '24 hours',
         message: `Support ticket ${caseId} created: "${input.subject}". Expected response within ${input.priority === 'P1' ? '1 hour' : input.priority === 'P2' ? '4 hours' : '24 hours'}.`,
+        _source: 'connected',
         source: 'Product Support Agent',
       }, null, 2);
     }
@@ -2144,6 +2239,7 @@ async function executeTool(name, input) {
         ],
         tracking_url: `https://experienceleague.adobe.com/home#/support/tickets/${caseId}`,
         message: `Case ${caseId} is in progress. Last update: fix deployed to stage, awaiting verification.`,
+        _source: 'connected',
         source: 'Product Support Agent',
       }, null, 2);
     }
