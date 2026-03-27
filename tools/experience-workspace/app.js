@@ -56,6 +56,34 @@ let activeResourcePath = null;
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 function scrollChat() { chatMessages.scrollTop = chatMessages.scrollHeight; }
 
+/* ── Toast Notification System ── */
+function showToast(message, type = 'info', duration = 4000) {
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastContainer';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+
+  const icons = { success: '✓', error: '✕', warn: '⚠', info: 'ℹ' };
+  toast.innerHTML = `
+    <span class="toast-icon">${icons[type] || icons.info}</span>
+    <span class="toast-message">${message}</span>
+  `;
+
+  container.appendChild(toast);
+  // Trigger entrance animation
+  requestAnimationFrame(() => toast.classList.add('visible'));
+
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    toast.addEventListener('transitionend', () => toast.remove());
+  }, duration);
+}
+
 function md(text) {
   return text
     .replace(/### (.*?)(\n|$)/g, '<h3>$1</h3>')
@@ -405,6 +433,65 @@ const TOOL_RENDERERS = {
         ${daUrl ? `<a href="${daUrl}" target="_blank" rel="noopener" class="page-card-link page-card-link-secondary">Open in Document Authoring →</a>` : ''}
       </div>`;
   },
+
+  /* ─ DA Editing Agent: Page Written Confirmation ─ */
+  edit_page_content(result) {
+    if (result.status === 'auth_required') {
+      return `
+        <div class="page-card page-card-warn">
+          <div class="page-card-header">
+            <div class="page-card-icon">🔐</div>
+            <div class="page-card-meta">
+              <div class="page-card-title">Adobe Sign-In Required</div>
+              <div class="page-card-author">Click "Sign In" to authenticate with Adobe IMS for DA editing</div>
+            </div>
+          </div>
+        </div>`;
+    }
+    if (result.status === 'error') {
+      return `
+        <div class="page-card page-card-error">
+          <div class="page-card-header">
+            <div class="page-card-icon">⚠</div>
+            <div class="page-card-meta">
+              <div class="page-card-title">DA Write Failed</div>
+              <div class="page-card-author">${result.error || 'Unknown error'}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+    if (result.status !== 'written') return null;
+    const path = result.page_path || '/';
+    const previewOk = result.preview_status === 'success';
+    return `
+      <div class="page-card page-card-live">
+        <div class="page-card-header">
+          <div class="page-card-icon">${previewOk ? '✓' : '📝'}</div>
+          <div class="page-card-meta">
+            <div class="page-card-title">${path} — ${previewOk ? 'Saved & Previewing' : 'Saved to DA'}</div>
+            <div class="page-card-author">${result.content_length?.toLocaleString() || '?'} chars · Preview ${result.preview_status || 'not triggered'}</div>
+          </div>
+        </div>
+        ${result.preview_url ? `<a href="${result.preview_url}" target="_blank" rel="noopener" class="page-card-link">Open preview →</a>` : ''}
+        ${result.da_edit_url ? `<a href="${result.da_edit_url}" target="_blank" rel="noopener" class="page-card-link page-card-link-secondary">Edit in DA →</a>` : ''}
+      </div>`;
+  },
+
+  /* ─ DA Editing Agent: Publish Confirmation ─ */
+  publish_page(result) {
+    if (result.status !== 'published') return null;
+    return `
+      <div class="page-card page-card-live">
+        <div class="page-card-header">
+          <div class="page-card-icon">🌐</div>
+          <div class="page-card-meta">
+            <div class="page-card-title">${result.page_path} — Published Live</div>
+            <div class="page-card-author">${result.published_at ? `Published ${new Date(result.published_at).toLocaleTimeString()}` : 'Just now'}</div>
+          </div>
+        </div>
+        ${result.live_url ? `<a href="${result.live_url}" target="_blank" rel="noopener" class="page-card-link">Open live page →</a>` : ''}
+      </div>`;
+  },
 };
 
 /* ── Contextual Suggestion Engine ── */
@@ -471,6 +558,20 @@ const TOOL_SUGGESTIONS = {
     { icon: '📋', label: 'View project status', prompt: 'Show me the current Workfront project health and timeline' },
     { icon: '👤', label: 'Check team capacity', prompt: 'Check team workload and capacity for this sprint' },
     { icon: '📊', label: 'View all tasks', prompt: 'Show all open tasks and their current status' },
+  ],
+  edit_page_content: [
+    { icon: '🛡️', label: 'Run governance', prompt: 'Run a full governance check on the page I just edited' },
+    { icon: '🌐', label: 'Publish live', prompt: 'Publish this page to the live .aem.live URL' },
+    { icon: '✏️', label: 'Edit more', prompt: 'Show me the current page content so I can make more changes' },
+  ],
+  preview_page: [
+    { icon: '🌐', label: 'Publish live', prompt: 'Publish this page live now' },
+    { icon: '🛡️', label: 'Run governance', prompt: 'Run governance and compliance checks before publishing' },
+  ],
+  publish_page: [
+    { icon: '📊', label: 'Check analytics', prompt: 'Show me analytics for this published page' },
+    { icon: '🎯', label: 'Setup A/B test', prompt: 'Create an A/B test on this published page' },
+    { icon: '📋', label: 'Notify stakeholders', prompt: 'Create a Workfront task to notify the team about the new publish' },
   ],
 };
 
@@ -592,6 +693,29 @@ async function handleRealChat(text, file) {
       } catch { /* not parseable JSON — skip rich render */ }
     }
 
+    // ── DA Editing Loop: Auto-refresh preview iframe ──
+    // When edit_page_content or preview_page completes, refresh the preview
+    try {
+      const result = JSON.parse(resultStr);
+      if (result._action === 'refresh_preview' && result._preview_path) {
+        const path = result._preview_path;
+        // Small delay to let AEM preview CDN catch up
+        setTimeout(() => {
+          navigateToPage(path);
+          showToast(result.status === 'written'
+            ? `Page ${path} saved & preview refreshed`
+            : `Preview refreshed for ${path}`,
+          result.status === 'error' ? 'error' : 'success');
+        }, 1500);
+      }
+      if (result.status === 'published' && result.live_url) {
+        showToast(`Published to ${result.live_url}`, 'success');
+      }
+      if (result.status === 'auth_required') {
+        showToast('Adobe sign-in required — click Sign In', 'warn');
+      }
+    } catch { /* not parseable — skip */ }
+
     // Check if all calls in this agent group are done — update the header dot
     const agentName = TOOL_AGENT_MAP[toolName] || 'Adobe Agent';
     const group = agentContainers[agentName];
@@ -677,7 +801,13 @@ function formatToolInput(toolName, input) {
     case 'extract_brief_content': return `"${input.file_name || 'brief'}"`;
     case 'create_ab_test': return `"${(input.test_name || '').slice(0, 30)}"`;
     case 'get_personalization_offers': return `"${input.location || input.segment || ''}"`;
+    case 'edit_page_content': return `"${input.page_path || ''}" (${input.html?.length || 0} chars)`;
+    case 'preview_page': return `"${input.page_path || ''}"`;
+    case 'publish_page': return `"${input.page_path || ''}"`;
+    case 'list_site_pages': return `"${input.path || '/'}"`;
+    case 'delete_page': return `"${input.page_path || ''}"`;
     case 'get_customer_profile': return `"${(input.identity || '').slice(0, 25)}"`;
+
     case 'generate_image_variations': return `"${(input.prompt || '').slice(0, 25)}"`;
     case 'get_pipeline_status': return `${input.environment || 'prod'}${input.status_filter ? ` (${input.status_filter})` : ''}`;
     case 'extract_pdf_content': return `"${input.file_name || 'document.pdf'}"`;

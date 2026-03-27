@@ -54,24 +54,32 @@ export const PROFILES = {
       namingConvention: 'kebab-case, descriptive, includes dimensions',
     },
 
+    aepOrgId: '708E423B67F3C2050A495C27@AdobeOrg',
+    aepSandbox: 'prod',
+
     entitlements: {
       analytics: { name: 'Adobe Analytics', mcp: 'AA MCP', status: 'active', note: 'Needs report suite ID' },
-      cja: { name: 'Customer Journey Analytics', mcp: 'CJA MCP', status: 'active', note: 'Needs data view ID' },
-      aep: { name: 'Adobe Experience Platform', mcp: 'AEP MCP', status: 'active', note: 'Needs sandbox config' },
-      ajo: { name: 'Adobe Journey Optimizer', mcp: 'Marketing Agent MCP', status: 'active', note: 'Authenticated and live' },
+      cja: { name: 'Customer Journey Analytics', mcp: 'CJA MCP', status: 'live', endpoint: 'mcp-gateway.adobe.io/cja/mcp', note: 'Connected via MCP Gateway' },
+      aa: { name: 'Adobe Analytics', mcp: 'AA MCP', status: 'live', endpoint: 'mcp-gateway.adobe.io/aa/mcp', note: 'Connected via MCP Gateway' },
+      aep: { name: 'Adobe Experience Platform', mcp: 'AEP MCP', status: 'live', endpoint: 'platform.adobe.io/data/core/ups/segment/definitions', note: 'Segment API live — Prod (VA7)' },
+      ajo: { name: 'Adobe Journey Optimizer', mcp: 'Marketing Agent MCP', status: 'live', note: 'Authenticated and live' },
       target: { name: 'Adobe Target', mcp: 'Target MCP', status: 'active', note: 'Needs sandbox config' },
       aemContent: { name: 'AEM Content', mcp: 'AEM Content MCP', status: 'live', note: 'Working today' },
       aemLaunches: { name: 'AEM Launches', mcp: 'AEM Content MCP', status: 'live', note: 'Working today' },
+      daEditing: { name: 'DA Editing Agent', mcp: 'DA Editing Agent', status: 'live', note: 'Real read/write/preview/publish via admin.da.live' },
       workfront: { name: 'Workfront', mcp: 'Workfront WOA', status: 'active', note: 'P1 skills integrated' },
     },
 
     mcpCapabilities: [
       { capability: 'AEM content read/write', mcp: 'AEM Content MCP', ready: true },
       { capability: 'AEM Launches', mcp: 'AEM Content MCP', ready: true },
-      { capability: 'Analytics queries', mcp: 'AA MCP', ready: false, needs: 'Report suite ID' },
-      { capability: 'CJA queries', mcp: 'CJA MCP', ready: false, needs: 'Data view ID' },
+      { capability: 'DA page editing (real)', mcp: 'DA Editing Agent', ready: true },
+      { capability: 'DA preview/publish', mcp: 'DA Editing Agent', ready: true },
+      { capability: 'Analytics queries', mcp: 'AA MCP', ready: true, endpoint: 'mcp-gateway.adobe.io/aa/mcp' },
+      { capability: 'CJA queries', mcp: 'CJA MCP', ready: true, endpoint: 'mcp-gateway.adobe.io/cja/mcp' },
+      { capability: 'AEP Segment API', mcp: 'AEP MCP', ready: true, endpoint: 'platform.adobe.io/data/core/ups/segment/definitions' },
       { capability: 'AJO journey reporting', mcp: 'Marketing Agent MCP', ready: true },
-      { capability: 'Audience creation/sharing', mcp: 'AEP + Target', ready: false, needs: 'Sandbox config' },
+      { capability: 'Audience creation/sharing', mcp: 'AEP + Target', ready: true },
     ],
 
     systemPromptExtras: '',

@@ -10,6 +10,8 @@
 
 import { buildCustomerContext, getActiveProfile } from './customer-profiles.js';
 import { KNOWN_SITES, resolveSite, listKnownSites, buildKnownSitesPrompt } from './known-sites.js';
+import * as da from './da-client.js';
+import { isSignedIn } from './ims.js';
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-20250514';
@@ -102,6 +104,66 @@ const AEM_TOOLS = [
         },
       },
       required: ['page_path', 'updates'],
+    },
+  },
+
+  /* ─── DA Editing Loop (real endpoints via da-client.js) ─── */
+
+  {
+    name: 'edit_page_content',
+    description: 'DA Editing Agent — Write complete HTML content to an AEM page via Document Authoring (DA). This is a REAL operation — it writes to admin.da.live, triggers AEM preview, and the preview iframe refreshes automatically. Use this to create or update page content. Always call get_page_content first to read existing content before editing.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Page path to write (e.g., "/coffee", "/about"). Will be suffixed with .html automatically.' },
+        html: { type: 'string', description: 'Complete HTML content for the page. Use AEM EDS block markup (div tables with block class names). Include sections separated by <hr> tags.' },
+        trigger_preview: { type: 'boolean', description: 'Whether to trigger AEM preview after writing (default: true). Set false for draft-only saves.' },
+      },
+      required: ['page_path', 'html'],
+    },
+  },
+  {
+    name: 'preview_page',
+    description: 'DA Editing Agent — Trigger AEM preview for a page via admin.hlx.page. Makes the page available at the .aem.page preview URL. The preview iframe refreshes automatically after this call.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Page path to preview (e.g., "/coffee")' },
+      },
+      required: ['page_path'],
+    },
+  },
+  {
+    name: 'publish_page',
+    description: 'DA Editing Agent — Publish a page to the live .aem.live URL via admin.hlx.page. Only call after the page has been previewed and governance-approved.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Page path to publish (e.g., "/coffee")' },
+      },
+      required: ['page_path'],
+    },
+  },
+  {
+    name: 'list_site_pages',
+    description: 'DA Editing Agent — List all pages/folders in a DA directory. Returns the file tree from admin.da.live. Use to discover what content exists on the site.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Directory path to list (default: "/"). Examples: "/", "/blog", "/products"' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'delete_page',
+    description: 'DA Editing Agent — Delete a page from the DA content repository. Use with caution — this removes the source content permanently.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Page path to delete (e.g., "/old-page")' },
+      },
+      required: ['page_path'],
     },
   },
   {
@@ -597,6 +659,12 @@ export const TOOL_AGENT_MAP = {
   patch_aem_page_content: 'AEM Content MCP',
   create_aem_launch: 'AEM Content MCP',
   promote_aem_launch: 'AEM Content MCP',
+  // DA Editing Agent (real DA endpoints)
+  edit_page_content: 'DA Editing Agent',
+  preview_page: 'DA Editing Agent',
+  publish_page: 'DA Editing Agent',
+  list_site_pages: 'DA Editing Agent',
+  delete_page: 'DA Editing Agent',
   // Adobe AI Agents
   search_dam_assets: 'Discovery Agent',
   run_governance_check: 'Governance Agent',
@@ -792,6 +860,197 @@ async function executeTool(name, input) {
         message: `Launch ${input.launch_id} promoted. Page is now live.`,
         published_at: new Date().toISOString(),
       }, null, 2);
+    }
+
+    /* ─── DA Editing Agent (real DA endpoints) ─── */
+
+    case 'edit_page_content': {
+      const pagePath = input.page_path.replace(/\.html$/, '');
+      const htmlPath = pagePath.endsWith('.html') ? pagePath : `${pagePath}.html`;
+      const org = da.getOrg();
+      const repo = da.getRepo();
+      const branch = da.getBranch();
+      const previewUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page${pagePath}`;
+      const daUrl = `https://da.live/edit#/${org}/${repo}${pagePath}`;
+      const triggerPreview = input.trigger_preview !== false;
+
+      // Check if user is signed in (DA requires IMS auth)
+      if (!isSignedIn()) {
+        return JSON.stringify({
+          status: 'auth_required',
+          error: 'Adobe sign-in required for DA editing. Click "Sign In" to authenticate with Adobe IMS.',
+          page_path: pagePath,
+        }, null, 2);
+      }
+
+      try {
+        // Write content to DA via admin.da.live
+        await da.updatePage(htmlPath, input.html);
+
+        let previewStatus = 'skipped';
+        let previewTimestamp = null;
+
+        // Trigger AEM preview if requested
+        if (triggerPreview) {
+          try {
+            const previewResp = await da.previewPage(pagePath);
+            previewStatus = previewResp.ok ? 'success' : `failed (${previewResp.status})`;
+            previewTimestamp = new Date().toISOString();
+          } catch (previewErr) {
+            previewStatus = `failed: ${previewErr.message}`;
+          }
+        }
+
+        return JSON.stringify({
+          status: 'written',
+          page_path: pagePath,
+          content_length: input.html.length,
+          da_source: `${da.getBasePath()}${htmlPath}`,
+          preview_url: previewUrl,
+          da_edit_url: daUrl,
+          preview_triggered: triggerPreview,
+          preview_status: previewStatus,
+          preview_timestamp: previewTimestamp,
+          message: `Page content written to ${pagePath} via DA.${triggerPreview ? ` Preview ${previewStatus === 'success' ? 'refreshed' : 'trigger ' + previewStatus}.` : ''} Open in DA to edit visually.`,
+          _action: 'refresh_preview',
+          _preview_path: pagePath,
+        }, null, 2);
+      } catch (err) {
+        return JSON.stringify({
+          status: 'error',
+          error: `DA write failed: ${err.message}`,
+          page_path: pagePath,
+          hint: 'Ensure you are signed in with Adobe IMS and have write access to this repository.',
+        }, null, 2);
+      }
+    }
+
+    case 'preview_page': {
+      const pagePath = input.page_path.replace(/\.html$/, '');
+      const org = da.getOrg();
+      const repo = da.getRepo();
+      const branch = da.getBranch();
+      const previewUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page${pagePath}`;
+
+      if (!isSignedIn()) {
+        return JSON.stringify({
+          status: 'auth_required',
+          error: 'Adobe sign-in required. Click "Sign In" to authenticate.',
+        }, null, 2);
+      }
+
+      try {
+        const resp = await da.previewPage(pagePath);
+        return JSON.stringify({
+          status: resp.ok ? 'success' : 'failed',
+          page_path: pagePath,
+          preview_url: previewUrl,
+          http_status: resp.status,
+          timestamp: new Date().toISOString(),
+          message: resp.ok
+            ? `Preview triggered for ${pagePath}. Page available at ${previewUrl}`
+            : `Preview trigger returned ${resp.status} for ${pagePath}`,
+          _action: 'refresh_preview',
+          _preview_path: pagePath,
+        }, null, 2);
+      } catch (err) {
+        return JSON.stringify({
+          status: 'error',
+          error: `Preview trigger failed: ${err.message}`,
+          page_path: pagePath,
+        }, null, 2);
+      }
+    }
+
+    case 'publish_page': {
+      const pagePath = input.page_path.replace(/\.html$/, '');
+      const org = da.getOrg();
+      const repo = da.getRepo();
+      const branch = da.getBranch();
+      const liveUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.live${pagePath}`;
+
+      if (!isSignedIn()) {
+        return JSON.stringify({
+          status: 'auth_required',
+          error: 'Adobe sign-in required. Click "Sign In" to authenticate.',
+        }, null, 2);
+      }
+
+      try {
+        const resp = await da.publishPage(pagePath);
+        return JSON.stringify({
+          status: resp.ok ? 'published' : 'failed',
+          page_path: pagePath,
+          live_url: liveUrl,
+          http_status: resp.status,
+          published_at: new Date().toISOString(),
+          message: resp.ok
+            ? `Page published to ${liveUrl}`
+            : `Publish returned ${resp.status} for ${pagePath}`,
+        }, null, 2);
+      } catch (err) {
+        return JSON.stringify({
+          status: 'error',
+          error: `Publish failed: ${err.message}`,
+          page_path: pagePath,
+        }, null, 2);
+      }
+    }
+
+    case 'list_site_pages': {
+      const listPath = input.path || '/';
+
+      if (!isSignedIn()) {
+        return JSON.stringify({
+          status: 'auth_required',
+          error: 'Adobe sign-in required. Click "Sign In" to authenticate.',
+        }, null, 2);
+      }
+
+      try {
+        const items = await da.listPages(listPath);
+        return JSON.stringify({
+          status: 'success',
+          path: listPath,
+          items: Array.isArray(items) ? items : [],
+          count: Array.isArray(items) ? items.length : 0,
+          da_base: da.getBasePath(),
+          message: `Found ${Array.isArray(items) ? items.length : 0} items in ${listPath}`,
+        }, null, 2);
+      } catch (err) {
+        return JSON.stringify({
+          status: 'error',
+          error: `List failed: ${err.message}`,
+          path: listPath,
+        }, null, 2);
+      }
+    }
+
+    case 'delete_page': {
+      const pagePath = input.page_path.replace(/\.html$/, '');
+      const htmlPath = `${pagePath}.html`;
+
+      if (!isSignedIn()) {
+        return JSON.stringify({
+          status: 'auth_required',
+          error: 'Adobe sign-in required. Click "Sign In" to authenticate.',
+        }, null, 2);
+      }
+
+      try {
+        await da.deletePage(htmlPath);
+        return JSON.stringify({
+          status: 'deleted',
+          page_path: pagePath,
+          message: `Page ${pagePath} deleted from DA.`,
+        }, null, 2);
+      } catch (err) {
+        return JSON.stringify({
+          status: 'error',
+          error: `Delete failed: ${err.message}`,
+          page_path: pagePath,
+        }, null, 2);
+      }
     }
 
     /* ─── Discovery Agent ─── */
@@ -1916,6 +2175,24 @@ You have 34 tools spanning 14 Adobe AI Agents. USE THEM when relevant — the AI
 **ETag Pattern**: copy_aem_page returns an ETag → use it in patch_aem_page_content. If you get a conflict, call get_page_content for a fresh ETag and retry.
 **Edit URLs**: After creating or patching pages, share the Universal Editor and DA links so users can open and edit visually.
 
+### DA Editing Agent (REAL DA endpoints — admin.da.live)
+These tools write to the real Document Authoring API. The user must be signed in with Adobe IMS.
+- **edit_page_content** — Write complete HTML content to a page. This is a LIVE operation — it writes to DA, triggers preview, and the preview panel refreshes automatically. ALWAYS call get_page_content first to understand existing page structure before writing.
+- **preview_page** — Trigger AEM preview for a page. Makes it available at the .aem.page URL. Preview panel refreshes automatically.
+- **publish_page** — Publish a page to the live .aem.live URL. Only call after preview and governance approval.
+- **list_site_pages** — List pages/folders from the DA content tree.
+- **delete_page** — Delete a page from DA. Use with caution.
+
+**DA Editing Loop (the signature workflow)**:
+1. User says "edit the hero text on /coffee" or "create a new landing page"
+2. Call **get_page_content** to read the current page HTML
+3. Modify the HTML content based on user instructions
+4. Call **edit_page_content** with the updated HTML — this writes to DA AND triggers preview
+5. The preview iframe refreshes automatically — the user sees the change live
+6. If satisfied, call **publish_page** to go live
+
+**IMPORTANT**: When using edit_page_content, always maintain the existing EDS block structure (div tables with block class names, sections separated by <hr>). Never strip block markup or simplify to plain HTML.
+
 ### Discovery Agent (DAM search & collections)
 - **search_dam_assets** — Natural language search across AEM Assets (DAM). Supports filters: date_range (e.g., "last 30 days"), tags (array), folder path, exclude terms. Returns approved assets with Dynamic Media delivery URLs.
 - **add_to_collection** — Add one or more assets to an AEM Assets collection. Creates the collection if it doesn't exist.
@@ -1989,6 +2266,9 @@ You have 34 tools spanning 14 Adobe AI Agents. USE THEM when relevant — the AI
 15. For journey conflict analysis (scheduling, audience overlap), call analyze_journey_conflicts.
 16. For support tickets, call create_support_ticket to create and get_ticket_status to check updates.
 17. IMPORTANT: After creating or patching pages, ALWAYS share the Universal Editor and DA edit links in your response so the user can open and edit the page visually.
+18. **DA EDITING LOOP (highest priority for content edits)**: When the user wants to edit existing page content or create new pages, prefer the DA Editing Agent tools (edit_page_content, preview_page, publish_page). The workflow: get_page_content → modify HTML → edit_page_content → preview refreshes automatically in the workspace. This is a LIVE editing loop — changes appear immediately.
+19. When users say "edit the page", "change the headline", "update the hero", "create a landing page" — use the DA editing tools. Read first, then write.
+20. NEVER call edit_page_content without first reading the page with get_page_content (unless creating a brand new page that doesn't exist yet).
 
 ## Capabilities — 34 Tools, 14 Agents, Full Adobe Stack
 - **Page Analysis**: Analyze EDS pages — structure, blocks, sections, metadata, performance
