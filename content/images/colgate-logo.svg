@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200">
+  <rect width="400" height="200" rx="12" fill="#e21836"/>
+  <text x="200" y="105" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="48" font-weight="700" fill="#ffffff" font-style="italic">Colgate</text>
+  <line x1="80" y1="140" x2="320" y2="140" stroke="#ffffff" stroke-width="2" opacity="0.5"/>
+</svg>

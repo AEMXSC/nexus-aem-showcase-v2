@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200">
+  <rect width="400" height="200" rx="12" fill="#1a1a2e"/>
+  <text x="200" y="90" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700" fill="#ffffff" letter-spacing="3">OMNICOM</text>
+  <text x="200" y="130" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#8888aa" letter-spacing="6">GROUP</text>
+</svg>
