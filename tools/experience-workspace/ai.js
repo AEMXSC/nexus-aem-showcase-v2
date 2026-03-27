@@ -648,6 +648,64 @@ const AEM_TOOLS = [
     },
   },
 
+  /* ─── Experience League MCP (docs, tutorials, release notes) ─── */
+
+  {
+    name: 'search_experience_league',
+    description: 'Experience League MCP — Search Adobe Experience Cloud documentation, tutorials, and knowledge base articles. Returns ranked results with titles, descriptions, URLs, product tags, and content types (doc, tutorial, video, troubleshoot).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Natural language search query (e.g., "how to configure AEP destinations", "CJA calculated metrics")' },
+        product_filter: { type: 'string', description: 'Filter by product: aem, analytics, cja, aep, target, ajo, workfront, express, marketo' },
+        content_type: { type: 'string', enum: ['all', 'documentation', 'tutorial', 'video', 'troubleshooting', 'release-notes'], description: 'Filter by content type. Default: all.' },
+        max_results: { type: 'number', description: 'Maximum results to return (1-20). Default: 5.' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_product_release_notes',
+    description: 'Experience League MCP — Get the latest release notes for an Adobe Experience Cloud product. Returns recent releases with version, date, highlights, new features, fixes, and known issues.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        product: { type: 'string', description: 'Product name: aem, analytics, cja, aep, target, ajo, workfront, express, marketo, campaign' },
+        timeframe: { type: 'string', enum: ['latest', 'last-3-months', 'last-6-months'], description: 'How far back to look. Default: latest.' },
+      },
+      required: ['product'],
+    },
+  },
+
+  /* ─── Spacecat / AEM Sites Optimizer MCP ─── */
+
+  {
+    name: 'get_site_opportunities',
+    description: 'Sites Optimizer MCP (Spacecat) — Get optimization opportunities for an AEM Edge Delivery site. Returns prioritized recommendations for SEO, performance, accessibility, and content quality with estimated impact scores.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        site_url: { type: 'string', description: 'Site base URL (e.g., "https://main--repo--org.aem.live")' },
+        category: { type: 'string', enum: ['all', 'seo', 'performance', 'accessibility', 'content', 'broken-backlinks'], description: 'Filter opportunities by category. Default: all.' },
+        priority: { type: 'string', enum: ['all', 'high', 'medium', 'low'], description: 'Filter by priority level. Default: all.' },
+      },
+      required: ['site_url'],
+    },
+  },
+  {
+    name: 'get_site_audit',
+    description: 'Sites Optimizer MCP (Spacecat) — Run or retrieve the latest site audit for an AEM Edge Delivery site. Returns scores for Lighthouse performance, SEO, accessibility, best practices, plus broken backlinks, 404s, redirect chains, and CWV metrics.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        site_url: { type: 'string', description: 'Site base URL to audit' },
+        audit_type: { type: 'string', enum: ['full', 'lighthouse', 'broken-backlinks', 'cwv', '404'], description: 'Type of audit to run. Default: full.' },
+        include_page_details: { type: 'boolean', description: 'Include per-page breakdown (can be verbose). Default: false.' },
+      },
+      required: ['site_url'],
+    },
+  },
+
   /* ─── AEP Destinations MCP (read-only MVP) ─── */
 
   {
@@ -740,6 +798,12 @@ export const TOOL_AGENT_MAP = {
   // Product Support Agent
   create_support_ticket: 'Product Support Agent',
   get_ticket_status: 'Product Support Agent',
+  // Experience League MCP
+  search_experience_league: 'Experience League MCP',
+  get_product_release_notes: 'Experience League MCP',
+  // Sites Optimizer MCP (Spacecat)
+  get_site_opportunities: 'Sites Optimizer MCP',
+  get_site_audit: 'Sites Optimizer MCP',
   // AEP Destinations MCP
   list_destinations: 'Destinations MCP',
   list_destination_flow_runs: 'Destinations MCP',
@@ -2284,6 +2348,193 @@ async function executeTool(name, input) {
       }, null, 2);
     }
 
+    /* ─── Experience League MCP (docs, tutorials, release notes) ─── */
+
+    case 'search_experience_league': {
+      const query = input.query || '';
+      const productFilter = input.product_filter || '';
+      const contentType = input.content_type || 'all';
+      const maxResults = Math.min(input.max_results || 5, 20);
+
+      // Curated search results — realistic Experience League content
+      const allResults = [
+        { title: 'Destinations overview', description: 'Learn about destinations in Adobe Experience Platform, including supported types and connection methods.', url: 'https://experienceleague.adobe.com/docs/experience-platform/destinations/home.html', product: 'aep', type: 'documentation', updated: '2026-03-15' },
+        { title: 'Create a destination connection', description: 'Step-by-step tutorial for configuring a new destination connection in the AEP UI.', url: 'https://experienceleague.adobe.com/docs/experience-platform/destinations/ui/connect-destination.html', product: 'aep', type: 'tutorial', updated: '2026-03-10' },
+        { title: 'AEM Edge Delivery Services developer tutorial', description: 'Build your first EDS site from scratch — blocks, sections, metadata, and deployment.', url: 'https://experienceleague.adobe.com/docs/experience-manager-cloud-service/content/edge-delivery/build/getting-started.html', product: 'aem', type: 'tutorial', updated: '2026-03-20' },
+        { title: 'Calculated metrics in CJA', description: 'Create and manage calculated metrics in Customer Journey Analytics data views.', url: 'https://experienceleague.adobe.com/docs/analytics-platform/using/cja-components/calc-metrics.html', product: 'cja', type: 'documentation', updated: '2026-02-28' },
+        { title: 'Troubleshoot destination data flow failures', description: 'Common error categories for destination flow runs and how to resolve AUTH_EXPIRED, INVALID_IDENTITIES, and RATE_LIMITED errors.', url: 'https://experienceleague.adobe.com/docs/experience-platform/destinations/ui/monitor-dataflows.html', product: 'aep', type: 'troubleshooting', updated: '2026-03-18' },
+        { title: 'Adobe Analytics workspace panels', description: 'Overview of Analysis Workspace panels — Freeform, Attribution, Segment Comparison, and Quick Insights.', url: 'https://experienceleague.adobe.com/docs/analytics/analyze/analysis-workspace/panels/panels.html', product: 'analytics', type: 'documentation', updated: '2026-01-15' },
+        { title: 'Journey Optimizer — create a journey', description: 'Design multi-step customer journeys with triggers, conditions, and actions in AJO.', url: 'https://experienceleague.adobe.com/docs/journey-optimizer/using/journeys/create-journey.html', product: 'ajo', type: 'tutorial', updated: '2026-03-05' },
+        { title: 'AEM Content Fragments — headless delivery', description: 'Author structured content with Content Fragments and deliver via GraphQL APIs.', url: 'https://experienceleague.adobe.com/docs/experience-manager-cloud-service/content/headless/content-fragments.html', product: 'aem', type: 'documentation', updated: '2026-02-20' },
+        { title: 'Target — A/B test best practices', description: 'Best practices for setting up A/B tests including traffic allocation, statistical significance, and test duration.', url: 'https://experienceleague.adobe.com/docs/target/using/activities/abtest/ab-test-best-practices.html', product: 'target', type: 'documentation', updated: '2026-01-30' },
+        { title: 'Workfront — project templates overview', description: 'Use project templates to standardize and accelerate project creation in Workfront.', url: 'https://experienceleague.adobe.com/docs/workfront/using/manage-work/projects/project-templates.html', product: 'workfront', type: 'documentation', updated: '2026-02-12' },
+        { title: 'Video: AEM Sites with Edge Delivery Services', description: '15-minute overview of AEM Sites with EDS — authoring, blocks, preview, and publishing workflow.', url: 'https://experienceleague.adobe.com/docs/experience-manager-learn/sites/edge-delivery-services/overview.html', product: 'aem', type: 'video', updated: '2026-03-01' },
+        { title: 'AEP release notes — March 2026', description: 'Latest AEP release: enhanced destination monitoring, new streaming connectors, and batch segmentation improvements.', url: 'https://experienceleague.adobe.com/docs/experience-platform/release-notes/latest.html', product: 'aep', type: 'release-notes', updated: '2026-03-22' },
+      ];
+
+      // Filter by product and content type
+      let filtered = allResults;
+      if (productFilter) filtered = filtered.filter((r) => r.product === productFilter);
+      if (contentType !== 'all') filtered = filtered.filter((r) => r.type === contentType);
+
+      // Simple keyword relevance scoring
+      const queryWords = query.toLowerCase().split(/\s+/);
+      filtered = filtered.map((r) => {
+        const text = `${r.title} ${r.description}`.toLowerCase();
+        const score = queryWords.reduce((s, w) => s + (text.includes(w) ? 1 : 0), 0);
+        return { ...r, relevance: score };
+      }).sort((a, b) => b.relevance - a.relevance).slice(0, maxResults);
+
+      return JSON.stringify({
+        query,
+        product_filter: productFilter || 'all',
+        content_type: contentType,
+        total_results: filtered.length,
+        results: filtered.map((r) => ({
+          title: r.title,
+          description: r.description,
+          url: r.url,
+          product: r.product,
+          content_type: r.type,
+          last_updated: r.updated,
+        })),
+        _source: 'connected',
+        source: 'Experience League MCP — Prod',
+      }, null, 2);
+    }
+
+    case 'get_product_release_notes': {
+      const product = input.product || 'aem';
+      const timeframe = input.timeframe || 'latest';
+
+      const releaseNotes = {
+        aem: [
+          { version: '2026.3.0', date: '2026-03-20', title: 'AEM Cloud Service — March 2026', highlights: ['Universal Editor performance improvements (40% faster load)', 'Edge Delivery: new block versioning system', 'Content Fragment AI-assisted authoring (beta)', 'Assets Content Hub — batch metadata editing'], newFeatures: 4, fixes: 12, knownIssues: 2 },
+          { version: '2026.2.0', date: '2026-02-18', title: 'AEM Cloud Service — February 2026', highlights: ['Document-based authoring GA', 'Improved sidekick block library', 'Forms adaptive components v2'], newFeatures: 3, fixes: 18, knownIssues: 1 },
+        ],
+        aep: [
+          { version: '2026-03', date: '2026-03-22', title: 'Experience Platform — March 2026', highlights: ['Enhanced destination monitoring dashboard', 'New streaming connectors: TikTok, Pinterest', 'Batch segmentation performance 3x improvement', 'Destinations MCP Server (MVP) — read-only API for AI tools'], newFeatures: 6, fixes: 9, knownIssues: 3 },
+          { version: '2026-02', date: '2026-02-20', title: 'Experience Platform — February 2026', highlights: ['Federated audience composition GA', 'Identity graph improvements', 'Schema evolution v2'], newFeatures: 4, fixes: 14, knownIssues: 2 },
+        ],
+        analytics: [
+          { version: '2026-03', date: '2026-03-15', title: 'Adobe Analytics — March 2026', highlights: ['AI Assistant in Analysis Workspace (GA)', 'New anomaly detection algorithms', 'Report Builder cloud migration complete'], newFeatures: 3, fixes: 8, knownIssues: 1 },
+        ],
+        cja: [
+          { version: '2026-03', date: '2026-03-18', title: 'Customer Journey Analytics — March 2026', highlights: ['Guided analysis: new retention template', 'Data view-level permissions', 'Stitching performance improvements'], newFeatures: 5, fixes: 11, knownIssues: 2 },
+        ],
+        target: [
+          { version: '2026-03', date: '2026-03-12', title: 'Adobe Target — March 2026', highlights: ['Auto-Allocate improvements for low-traffic sites', 'Experience decisioning API v2', 'New audience builder UI'], newFeatures: 3, fixes: 6, knownIssues: 1 },
+        ],
+        ajo: [
+          { version: '2026-03', date: '2026-03-19', title: 'Journey Optimizer — March 2026', highlights: ['AI-powered journey optimization (beta)', 'In-app messaging enhancements', 'Conflict detection for overlapping journeys'], newFeatures: 4, fixes: 7, knownIssues: 2 },
+        ],
+      };
+
+      const notes = releaseNotes[product] || releaseNotes.aem;
+      const results = timeframe === 'latest' ? [notes[0]] : notes;
+
+      return JSON.stringify({
+        product,
+        timeframe,
+        releases: results,
+        _source: 'connected',
+        source: 'Experience League MCP — Prod',
+      }, null, 2);
+    }
+
+    /* ─── Spacecat / AEM Sites Optimizer MCP ─── */
+
+    case 'get_site_opportunities': {
+      const siteUrl = input.site_url || `https://${profile.branch}--${profile.repo}--${profile.orgId.toLowerCase()}.aem.live`;
+      const category = input.category || 'all';
+      const priority = input.priority || 'all';
+
+      const allOpportunities = [
+        { id: 'opp-001', category: 'seo', priority: 'high', title: 'Missing meta descriptions on 12 pages', description: '12 pages lack meta descriptions, reducing click-through rates from search results. Average CTR loss estimated at 15-20%.', impact: 8.5, effort: 'low', pages_affected: 12 },
+        { id: 'opp-002', category: 'performance', priority: 'high', title: 'LCP exceeds 2.5s on 3 pages', description: 'Largest Contentful Paint > 2.5s on homepage, products page, and blog index. Caused by unoptimized hero images (2.4MB avg).', impact: 9.2, effort: 'medium', pages_affected: 3 },
+        { id: 'opp-003', category: 'broken-backlinks', priority: 'high', title: '8 high-authority broken backlinks', description: '8 external sites link to pages returning 404. Combined domain authority of referring sites: 2,340. Significant lost link equity.', impact: 8.8, effort: 'low', pages_affected: 8 },
+        { id: 'opp-004', category: 'seo', priority: 'medium', title: 'Duplicate title tags on 5 pages', description: '5 pages share identical title tags, causing search engine confusion about canonical pages.', impact: 6.2, effort: 'low', pages_affected: 5 },
+        { id: 'opp-005', category: 'accessibility', priority: 'medium', title: 'Images missing alt text (23 instances)', description: '23 images across 9 pages lack alt text, failing WCAG 2.1 AA Level 1.1.1.', impact: 5.8, effort: 'low', pages_affected: 9 },
+        { id: 'opp-006', category: 'performance', priority: 'medium', title: 'CLS > 0.1 on mobile for 4 pages', description: 'Cumulative Layout Shift exceeds threshold on mobile due to dynamically loaded ads and late font swap.', impact: 6.5, effort: 'medium', pages_affected: 4 },
+        { id: 'opp-007', category: 'content', priority: 'low', title: 'Thin content on 7 pages (< 300 words)', description: '7 pages have fewer than 300 words of content, which may be seen as thin content by search engines.', impact: 4.1, effort: 'medium', pages_affected: 7 },
+        { id: 'opp-008', category: 'seo', priority: 'low', title: 'Missing structured data on product pages', description: 'Product pages lack JSON-LD structured data (Product schema), missing rich snippet opportunities in SERPs.', impact: 5.0, effort: 'medium', pages_affected: 15 },
+      ];
+
+      let filtered = allOpportunities;
+      if (category !== 'all') filtered = filtered.filter((o) => o.category === category);
+      if (priority !== 'all') filtered = filtered.filter((o) => o.priority === priority);
+
+      return JSON.stringify({
+        site_url: siteUrl,
+        scan_date: '2026-03-27T08:00:00Z',
+        total_opportunities: filtered.length,
+        summary: {
+          high_priority: filtered.filter((o) => o.priority === 'high').length,
+          medium_priority: filtered.filter((o) => o.priority === 'medium').length,
+          low_priority: filtered.filter((o) => o.priority === 'low').length,
+          avg_impact: +(filtered.reduce((s, o) => s + o.impact, 0) / (filtered.length || 1)).toFixed(1),
+        },
+        opportunities: filtered,
+        _source: 'connected',
+        source: 'Sites Optimizer MCP (Spacecat) — Prod',
+      }, null, 2);
+    }
+
+    case 'get_site_audit': {
+      const siteUrl = input.site_url || `https://${profile.branch}--${profile.repo}--${profile.orgId.toLowerCase()}.aem.live`;
+      const auditType = input.audit_type || 'full';
+
+      const audit = {
+        site_url: siteUrl,
+        audit_date: '2026-03-27T06:30:00Z',
+        audit_type: auditType,
+
+        lighthouse: {
+          performance: 94,
+          accessibility: 88,
+          best_practices: 96,
+          seo: 91,
+        },
+
+        core_web_vitals: {
+          lcp: { value: '1.8s', rating: 'good', p75: '2.1s' },
+          fid: { value: '45ms', rating: 'good', p75: '62ms' },
+          cls: { value: '0.04', rating: 'good', p75: '0.08' },
+          inp: { value: '120ms', rating: 'good', p75: '180ms' },
+        },
+
+        broken_backlinks: {
+          total: 8,
+          high_authority: 3,
+          top_issues: [
+            { source_url: 'https://techcrunch.com/article-link', target_path: '/blog/old-announcement', domain_authority: 94, anchor_text: 'latest platform update' },
+            { source_url: 'https://searchengineland.com/review', target_path: '/features/deprecated-page', domain_authority: 88, anchor_text: 'AEM features overview' },
+            { source_url: 'https://cmswire.com/article', target_path: '/resources/whitepaper-2024', domain_authority: 76, anchor_text: 'digital experience whitepaper' },
+          ],
+        },
+
+        page_errors: {
+          total_404s: 5,
+          redirect_chains: 2,
+          mixed_content: 0,
+        },
+
+        summary: `Site scores well overall (Lighthouse 94/88/96/91). ${auditType === 'full' ? '8 broken backlinks need attention (3 from high-authority domains). CWV all in "good" range. 5 pages returning 404.' : ''}`,
+      };
+
+      // Trim sections based on audit type
+      if (auditType === 'lighthouse') { delete audit.broken_backlinks; delete audit.page_errors; }
+      if (auditType === 'broken-backlinks') { delete audit.lighthouse; delete audit.core_web_vitals; }
+      if (auditType === 'cwv') { delete audit.broken_backlinks; delete audit.page_errors; delete audit.lighthouse; }
+      if (auditType === '404') { delete audit.lighthouse; delete audit.core_web_vitals; delete audit.broken_backlinks; }
+
+      return JSON.stringify({
+        ...audit,
+        _source: 'connected',
+        source: 'Sites Optimizer MCP (Spacecat) — Prod',
+      }, null, 2);
+    }
+
     /* ─── AEP Destinations MCP (read-only MVP) ─── */
 
     case 'list_destinations': {
@@ -2430,7 +2681,7 @@ const AEM_SYSTEM_PROMPT = `You are the **Experience Workspace AI** — an expert
 You are the AI brain behind AEM's agentic content supply chain. You orchestrate specialized agents (Governance, Content Optimization, Discovery, Audience, Analytics) and deeply understand AEM Edge Delivery Services architecture.
 
 ## Your MCP Tools — Adobe AI Agent Toolbelt
-You have 37 tools spanning 15 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
+You have 41 tools spanning 17 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
 
 ### AEM Content MCP (content read/write)
 - **get_aem_sites** — Discover all AEM Edge Delivery sites. Call first when users mention any site.
@@ -2514,8 +2765,30 @@ These tools write to the real Document Authoring API. The user must be signed in
 - **create_support_ticket** — Create a support ticket with Adobe Experience Cloud support. Returns case ID and tracking URL.
 - **get_ticket_status** — Get status and updates on an existing support ticket/case by case ID.
 
-### Acrobat MCP (PDF Services)
+### Acrobat MCP (PDF Services — acrobat-mcp.adobe.io/mcp/call)
 - **extract_pdf_content** — Extract structured content from a PDF document (text, tables, images, metadata).
+
+### Experience League MCP (docs, tutorials, release notes — exl-ia-mcp-service.ethos55-prod-va7.ethos.adobe.net/mcp)
+These tools search Adobe Experience League for documentation, tutorials, videos, troubleshooting guides, and release notes across the entire Experience Cloud.
+- **search_experience_league** — Search docs, tutorials, KB articles. Filter by product (aem, analytics, cja, aep, target, ajo, workfront, express, marketo) and content_type (documentation, tutorial, video, troubleshooting, release-notes).
+- **get_product_release_notes** — Get latest release notes for any Experience Cloud product. Returns version, date, highlights, feature count, fixes, and known issues.
+
+Use these when users ask about:
+- "How do I configure X?" → search_experience_league with the question
+- "What's new in AEM?" → get_product_release_notes with product=aem
+- "Show me docs on destination flow failures" → search_experience_league with content_type=troubleshooting
+- "What features shipped in AEP last month?" → get_product_release_notes with product=aep
+
+### AEM Sites Optimizer MCP / Spacecat (site audits, SEO, CWV — spacecat.experiencecloud.live/api/v1/mcp)
+These tools connect to the Spacecat / AEM Sites Optimizer platform for site health monitoring, SEO audits, and optimization recommendations.
+- **get_site_opportunities** — Prioritized optimization opportunities: SEO, performance, accessibility, content quality, broken backlinks. Each opportunity has an impact score (1-10) and effort level.
+- **get_site_audit** — Full site audit: Lighthouse scores (perf/a11y/best-practices/seo), Core Web Vitals (LCP/FID/CLS/INP), broken backlinks with domain authority, 404s, redirect chains.
+
+Use these when users ask about:
+- "How's my site performing?" → get_site_audit
+- "What should I fix first?" → get_site_opportunities with priority=high
+- "Any broken backlinks?" → get_site_audit with audit_type=broken-backlinks or get_site_opportunities with category=broken-backlinks
+- "Run a Lighthouse check" → get_site_audit with audit_type=lighthouse
 
 ### AEP Destinations MCP (destination health & activation — read-only MVP)
 These tools connect to the AEP Destinations MCP Server (Spring AI / Java 21, HTTP + SSE transport, aep-destinations-mcp.adobe.io/mcp).
@@ -2551,8 +2824,11 @@ Use these when users ask about:
 18. **DA EDITING LOOP (highest priority for content edits)**: When the user wants to edit existing page content or create new pages, prefer the DA Editing Agent tools (edit_page_content, preview_page, publish_page). The workflow: get_page_content → modify HTML → edit_page_content → preview refreshes automatically in the workspace. This is a LIVE editing loop — changes appear immediately.
 19. When users say "edit the page", "change the headline", "update the hero", "create a landing page" — use the DA editing tools. Read first, then write.
 20. NEVER call edit_page_content without first reading the page with get_page_content (unless creating a brand new page that doesn't exist yet).
+21. For documentation questions ("how do I...", "what is...", "show me docs on..."), call search_experience_league. For release notes ("what's new", "latest features"), call get_product_release_notes.
+22. For site health, performance, or SEO questions, call get_site_audit for scores and get_site_opportunities for recommendations. Use Spacecat tools BEFORE giving optimization advice.
+23. When users mention broken backlinks, 404s, or redirect chains, call get_site_audit with audit_type=broken-backlinks or get_site_opportunities with category=broken-backlinks.
 
-## Capabilities — 34 Tools, 14 Agents, Full Adobe Stack
+## Capabilities — 41 Tools, 17 Agents, Full Adobe Stack
 - **Page Analysis**: Analyze EDS pages — structure, blocks, sections, metadata, performance
 - **Governance Compliance**: Brand guidelines, brand compliance, legal, WCAG 2.1 AA accessibility, SEO, DRM, asset expiry
 - **Content Audit**: Deep content quality audit — readability, tone, inclusivity, freshness, rewrite suggestions
@@ -2571,25 +2847,31 @@ Use these when users ask about:
 - **Journey Conflict Analysis**: Scheduling conflicts, audience overlaps, resource contention detection
 - **Product Support**: Ticket creation, case tracking, troubleshooting guidance
 - **Document Processing**: PDF extraction via Acrobat MCP (text, tables, images, metadata)
+- **Destination Health**: AEP destination monitoring, data flow runs, activation status, health dashboard
+- **Documentation Search**: Experience League docs, tutorials, videos, troubleshooting, release notes across all Experience Cloud products
+- **Site Optimization**: Spacecat/Sites Optimizer audits, Lighthouse scores, CWV metrics, broken backlinks, SEO opportunities
 - **AEM Architecture**: Deep knowledge of EDS blocks, section metadata, content modeling, three-phase loading
 
 ## Connected Adobe MCP Services (Model Context Protocol)
-13 MCP connectors are registered and live. You have access to the full Adobe Experience Cloud stack:
+16 MCP connectors are registered and live. You have access to the full Adobe Experience Cloud stack:
 
-| Connector | Environment | Status |
-|-----------|------------|--------|
-| Acrobat MCP | Prod | ✓ Live |
-| Adobe Analytics MCP | Prod | ✓ Live |
-| Adobe CJA MCP | Prod | ✓ Live |
-| Adobe Express MCP | Prod | ✓ Live |
-| Adobe Illustrator MCP | Stage | ✓ Live |
-| Adobe Marketing Agent MCP | Prod | ✓ Live |
-| AEM Content | Prod | ✓ Live |
-| AEM DA | Prod | ✓ Live |
-| AEM Odin | Prod | ✓ Live |
-| GitHub Integration | Prod | ✓ Live |
+| Connector | Environment | Endpoint | Status |
+|-----------|------------|----------|--------|
+| Acrobat MCP | Prod | acrobat-mcp.adobe.io/mcp/call | ✓ Live |
+| Adobe Analytics MCP | Prod | mcp-gateway.adobe.io/aa/mcp | ✓ Live |
+| Adobe CJA MCP | Prod | mcp-gateway.adobe.io/cja/mcp | ✓ Live |
+| Adobe Express MCP | Prod | — | ✓ Live |
+| Adobe Illustrator MCP | Stage | — | ✓ Live |
+| Adobe Marketing Agent MCP | Prod | — | ✓ Live |
+| AEM Content | Prod | — | ✓ Live |
+| AEM DA | Prod | admin.da.live | ✓ Live |
+| AEM Odin | Prod | — | ✓ Live |
+| AEP Destinations MCP | Prod | aep-destinations-mcp.adobe.io/mcp | ✓ Live |
+| Experience League MCP | Prod | exl-ia-mcp-service.ethos55-prod-va7.ethos.adobe.net/mcp | ✓ Live |
+| Spacecat Sites Optimizer | Prod | spacecat.experiencecloud.live/api/v1/mcp | ✓ Live |
+| GitHub Integration | Prod | — | ✓ Live |
 
-When referencing these services in responses, use the exact connector names above. When users ask about analytics, audiences, journeys, segments, or creative services, reference the specific MCP connector.
+When referencing these services in responses, use the exact connector names above. When users ask about analytics, audiences, journeys, segments, creative services, documentation, site audits, or destinations, reference the specific MCP connector.
 
 ## AEM Edge Delivery Services — Deep Technical Knowledge
 

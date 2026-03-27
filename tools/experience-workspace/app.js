@@ -573,6 +573,26 @@ const TOOL_SUGGESTIONS = {
     { icon: '🎯', label: 'Setup A/B test', prompt: 'Create an A/B test on this published page' },
     { icon: '📋', label: 'Notify stakeholders', prompt: 'Create a Workfront task to notify the team about the new publish' },
   ],
+  search_experience_league: [
+    { icon: '📖', label: 'View tutorial', prompt: 'Show me a step-by-step tutorial for this topic' },
+    { icon: '📋', label: 'Release notes', prompt: 'What are the latest release notes for this product?' },
+    { icon: '🔧', label: 'Troubleshoot', prompt: 'Search for troubleshooting guides related to this topic' },
+  ],
+  get_product_release_notes: [
+    { icon: '📖', label: 'Deep dive', prompt: 'Search Experience League for docs on the new features mentioned' },
+    { icon: '📊', label: 'Compare versions', prompt: 'Show me release notes from the last 3 months to see the trend' },
+    { icon: '📋', label: 'Plan upgrades', prompt: 'Create a Workfront task to evaluate and adopt the new features' },
+  ],
+  get_site_opportunities: [
+    { icon: '🔧', label: 'Fix top issue', prompt: 'Help me fix the highest-impact opportunity' },
+    { icon: '📊', label: 'Full audit', prompt: 'Run a full site audit with Lighthouse scores and CWV metrics' },
+    { icon: '📋', label: 'Create tasks', prompt: 'Create Workfront tasks for each high-priority opportunity' },
+  ],
+  get_site_audit: [
+    { icon: '🎯', label: 'Get opportunities', prompt: 'What optimization opportunities do you recommend based on this audit?' },
+    { icon: '🔗', label: 'Fix backlinks', prompt: 'Show me the broken backlinks and suggest redirects to fix them' },
+    { icon: '📋', label: 'Track fixes', prompt: 'Create Workfront tasks for the issues found in the audit' },
+  ],
   list_destinations: [
     { icon: '🏥', label: 'Check health', prompt: 'Get destination health summary — any issues I should know about?' },
     { icon: '📊', label: 'View flow runs', prompt: 'Show me recent data flow runs across all destinations' },
@@ -839,6 +859,10 @@ function formatToolInput(toolName, input) {
     case 'analyze_journey_conflicts': return `"${(input.journey_name || '').slice(0, 25)}"`;
     case 'create_support_ticket': return `"${(input.subject || '').slice(0, 30)}"`;
     case 'get_ticket_status': return `"${input.case_id || ''}"`;
+    case 'search_experience_league': return `"${(input.query || '').slice(0, 30)}"${input.product_filter ? ` (${input.product_filter})` : ''}`;
+    case 'get_product_release_notes': return `${input.product || 'aem'} — ${input.timeframe || 'latest'}`;
+    case 'get_site_opportunities': return `${input.category || 'all'}${input.priority ? ` (${input.priority})` : ''}`;
+    case 'get_site_audit': return `${input.audit_type || 'full'}`;
     case 'list_destinations': return `${input.status_filter || 'all'}${input.type_filter ? ` (${input.type_filter})` : ''}`;
     case 'list_destination_flow_runs': return `"${input.destination_id || 'all'}"${input.hours ? ` ${input.hours}h` : ''}`;
     case 'get_destination_health': return input.include_flow_details ? 'detailed' : 'summary';

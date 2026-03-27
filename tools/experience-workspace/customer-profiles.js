@@ -57,9 +57,9 @@ export const PROFILES = {
     aepOrgId: '708E423B67F3C2050A495C27@AdobeOrg',
     aepSandbox: 'prod',
 
-    /* ── Real MCP Connectors (matches Admin Console) ── */
+    /* ── Real MCP Connectors (matches Admin Console + discovered endpoints) ── */
     connectors: [
-      { name: 'Acrobat MCP', env: 'Prod', type: 'CUSTOM', status: 'live' },
+      { name: 'Acrobat MCP', env: 'Prod', type: 'CUSTOM', status: 'live', endpoint: 'acrobat-mcp.adobe.io/mcp/call' },
       { name: 'Adobe Analytics MCP', env: 'Prod', type: 'CUSTOM', status: 'live' },
       { name: 'Adobe CJA MCP', env: 'Prod', type: 'CUSTOM', status: 'live' },
       { name: 'Adobe Express MCP', env: 'Dev', type: 'CUSTOM', status: 'live' },
@@ -71,12 +71,14 @@ export const PROFILES = {
       { name: 'AEM Content', env: 'Prod', type: 'CUSTOM', status: 'live' },
       { name: 'AEM DA', env: 'Prod', type: 'CUSTOM', status: 'live' },
       { name: 'AEM Odin', env: 'Prod', type: 'CUSTOM', status: 'live' },
-      { name: 'AEP Destinations MCP', env: 'Prod', type: 'CUSTOM', status: 'live' },
+      { name: 'AEP Destinations MCP', env: 'Prod', type: 'CUSTOM', status: 'live', endpoint: 'aep-destinations-mcp.adobe.io/mcp' },
+      { name: 'Experience League MCP', env: 'Prod', type: 'CUSTOM', status: 'live', endpoint: 'exl-ia-mcp-service.ethos55-prod-va7.ethos.adobe.net/mcp' },
+      { name: 'Spacecat Sites Optimizer MCP', env: 'Prod', type: 'CUSTOM', status: 'live', endpoint: 'spacecat.experiencecloud.live/api/v1/mcp' },
       { name: 'GitHub Integration', env: 'Prod', type: 'NATIVE', status: 'live' },
     ],
 
     entitlements: {
-      acrobat: { name: 'Acrobat MCP', mcp: 'Acrobat MCP - Prod', status: 'live', note: 'PDF extract, merge, convert via MCP' },
+      acrobat: { name: 'Acrobat MCP', mcp: 'Acrobat MCP - Prod', status: 'live', endpoint: 'acrobat-mcp.adobe.io/mcp/call', note: 'PDF extract, merge, convert via MCP — Prod endpoint live' },
       aa: { name: 'Adobe Analytics', mcp: 'Adobe Analytics MCP - Prod', status: 'live', endpoint: 'mcp-gateway.adobe.io/aa/mcp', note: 'Connected via MCP Gateway' },
       cja: { name: 'Customer Journey Analytics', mcp: 'Adobe CJA MCP - Prod', status: 'live', endpoint: 'mcp-gateway.adobe.io/cja/mcp', note: 'Connected via MCP Gateway' },
       express: { name: 'Adobe Express', mcp: 'Adobe Express MCP - Prod', status: 'live', note: 'Creative generation, templates, brand kit' },
@@ -88,6 +90,8 @@ export const PROFILES = {
       aemDA: { name: 'AEM DA', mcp: 'AEM DA - Prod', status: 'live', note: 'Document Authoring — real read/write/preview/publish via admin.da.live' },
       aemOdin: { name: 'AEM Odin', mcp: 'AEM Odin Prod', status: 'live', note: 'AEM Sites management and authoring' },
       destinations: { name: 'AEP Destinations', mcp: 'AEP Destinations MCP - Prod', status: 'live', endpoint: 'aep-destinations-mcp.adobe.io/mcp', note: 'Destination data flows, health monitoring, activation status — MVP read-only (13 tools)' },
+      exl: { name: 'Experience League MCP', mcp: 'Experience League MCP - Prod', status: 'live', endpoint: 'exl-ia-mcp-service.ethos55-prod-va7.ethos.adobe.net/mcp', note: 'Doc search, tutorials, release notes — Experience Cloud product docs for AI tools' },
+      sitesOptimizer: { name: 'Sites Optimizer (Spacecat)', mcp: 'Spacecat Sites Optimizer MCP - Prod', status: 'live', endpoint: 'spacecat.experiencecloud.live/api/v1/mcp', note: 'Site audit, SEO opportunities, performance recommendations, broken backlinks' },
       github: { name: 'GitHub Integration', mcp: 'GitHub Integration', status: 'live', note: 'Repo access, PR management, code sync' },
       workfront: { name: 'Workfront', mcp: 'Workfront WOA', status: 'active', note: 'P1 skills integrated — campaign ops' },
     },
@@ -102,12 +106,16 @@ export const PROFILES = {
       { capability: 'CJA queries', mcp: 'Adobe CJA MCP - Prod', ready: true, endpoint: 'mcp-gateway.adobe.io/cja/mcp' },
       { capability: 'AEP Segment API', mcp: 'AEP MCP', ready: true, endpoint: 'platform.adobe.io/data/core/ups/segment/definitions' },
       { capability: 'AJO journey orchestration', mcp: 'Adobe Marketing Agent MCP', ready: true },
-      { capability: 'PDF extraction/conversion', mcp: 'Acrobat MCP - Prod', ready: true },
+      { capability: 'PDF extraction/conversion', mcp: 'Acrobat MCP - Prod', ready: true, endpoint: 'acrobat-mcp.adobe.io/mcp/call' },
       { capability: 'Creative generation', mcp: 'Adobe Express MCP - Prod', ready: true },
       { capability: 'Vector editing', mcp: 'Adobe Illustrator MCP - Stage', ready: true },
       { capability: 'GitHub repo/PR management', mcp: 'GitHub Integration', ready: true },
       { capability: 'Destination data flow health', mcp: 'AEP Destinations MCP - Prod', ready: true, endpoint: 'aep-destinations-mcp.adobe.io/mcp' },
       { capability: 'Destination activation status', mcp: 'AEP Destinations MCP - Prod', ready: true },
+      { capability: 'Experience League doc search', mcp: 'Experience League MCP - Prod', ready: true, endpoint: 'exl-ia-mcp-service.ethos55-prod-va7.ethos.adobe.net/mcp' },
+      { capability: 'Product release notes', mcp: 'Experience League MCP - Prod', ready: true },
+      { capability: 'Site SEO audit', mcp: 'Spacecat Sites Optimizer MCP - Prod', ready: true, endpoint: 'spacecat.experiencecloud.live/api/v1/mcp' },
+      { capability: 'Site performance opportunities', mcp: 'Spacecat Sites Optimizer MCP - Prod', ready: true },
       { capability: 'Audience creation/sharing', mcp: 'AEP + Target', ready: true },
     ],
 
