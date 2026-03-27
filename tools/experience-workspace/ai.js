@@ -133,14 +133,18 @@ const AEM_TOOLS = [
 
   {
     name: 'search_dam_assets',
-    description: 'Discovery Agent — Natural language search across AEM Assets (DAM). Finds approved images, videos, content fragments matching a query. Returns asset paths, delivery URLs, metadata, and approval status.',
+    description: 'Discovery Agent — Natural language search across AEM Assets (DAM). Finds approved images, videos, content fragments matching a query. Supports date filters, tags, folder paths, and exclusions. Returns asset paths, Dynamic Media delivery URLs, metadata, and approval status.',
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Natural language search (e.g., "approved lifestyle images for wellness campaign targeting 35-55 demographic")' },
+        query: { type: 'string', description: 'Natural language search (e.g., "approved lifestyle images of people enjoying coffee")' },
         asset_type: { type: 'string', description: 'Filter: image, video, document, content-fragment', enum: ['image', 'video', 'document', 'content-fragment', 'any'] },
-        approved_only: { type: 'boolean', description: 'Only return approved assets (default true)' },
-        limit: { type: 'number', description: 'Max results (default 5)' },
+        approved_only: { type: 'boolean', description: 'Only return approved/rights-safe assets (default true)' },
+        limit: { type: 'number', description: 'Max results (default 6)' },
+        date_range: { type: 'string', description: 'Date filter (e.g., "last 6 months", "last 12 months", "2025")' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags (e.g., ["mountain", "hiking", "spring-campaign"])' },
+        folder: { type: 'string', description: 'DAM folder path to search within (e.g., "/content/dam/frescopa")' },
+        exclude: { type: 'string', description: 'Natural language exclusion (e.g., "exclude coffee machines", "no city backgrounds")' },
       },
       required: ['query'],
     },
@@ -340,12 +344,27 @@ const AEM_TOOLS = [
 
   {
     name: 'get_pipeline_status',
-    description: 'Development Agent (Cloud Manager) — Get deployment pipeline status for an AEM environment. Returns pipeline runs, build status, deployment targets, and environment health.',
+    description: 'Development Agent (Cloud Manager) — Get deployment pipeline status for an AEM environment. Returns pipeline runs, build status, deployment targets, and environment health. Include failed pipelines and error details.',
     input_schema: {
       type: 'object',
       properties: {
-        environment: { type: 'string', description: 'Environment name', enum: ['dev', 'stage', 'prod'] },
+        environment: { type: 'string', description: 'Environment name', enum: ['dev', 'stage', 'prod', 'all'] },
         pipeline_id: { type: 'string', description: 'Specific pipeline ID (optional)' },
+        status_filter: { type: 'string', description: 'Filter by status', enum: ['all', 'failed', 'running', 'completed'] },
+        program_name: { type: 'string', description: 'Cloud Manager program name (e.g., "Main Program")' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'analyze_pipeline_failure',
+    description: 'Development Agent — Analyze the most recent failed Cloud Manager pipeline. Identifies root cause, surfaces relevant logs, and proposes remediations.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pipeline_id: { type: 'string', description: 'Pipeline ID to analyze (default: most recent failed)' },
+        program_name: { type: 'string', description: 'Cloud Manager program name' },
+        include_logs: { type: 'boolean', description: 'Include build/deploy log excerpts (default true)' },
       },
       required: [],
     },
@@ -365,6 +384,161 @@ const AEM_TOOLS = [
         extract_images: { type: 'boolean', description: 'Extract image metadata and alt text (default true)' },
       },
       required: ['file_name'],
+    },
+  },
+
+  /* ─── Experience Production Agent (extended) ─── */
+
+  {
+    name: 'translate_page',
+    description: 'Experience Production Agent — Translate a page to a target language and place it in the correct language tree. Uses AEM translation framework with AI-assisted translation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_url: { type: 'string', description: 'Source page URL or path to translate' },
+        target_language: { type: 'string', description: 'Target language code (e.g., "es", "fr", "de", "ja", "pt-br")' },
+        language_tree_path: { type: 'string', description: 'Target path in language tree (e.g., "/content/site/es/")' },
+        site_id: { type: 'string', description: 'Site identifier' },
+      },
+      required: ['page_url', 'target_language'],
+    },
+  },
+  {
+    name: 'create_form',
+    description: 'Experience Production Agent — Create or import a form using generative AI. Generates an AEM Edge Delivery form with fields, validation, and submit action based on a natural language description.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'Natural language description of the form (e.g., "contact form with name, email, phone, and message fields")' },
+        form_type: { type: 'string', description: 'Form type', enum: ['contact', 'lead-gen', 'survey', 'registration', 'newsletter', 'custom'] },
+        fields: {
+          type: 'array',
+          items: { type: 'object' },
+          description: 'Optional explicit field definitions: [{ name, type, label, required, options }]',
+        },
+        submit_action: { type: 'string', description: 'Form submit destination (e.g., "email", "spreadsheet", "api-endpoint")' },
+        page_path: { type: 'string', description: 'Page to place the form on' },
+      },
+      required: ['description'],
+    },
+  },
+  {
+    name: 'modernize_content',
+    description: 'Experience Production Agent — Audit and modernize pages to match the latest design system. Returns a modernization report with affected components, suggested updates, and compliance status. Supports dry-run mode.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        site_url: { type: 'string', description: 'Site base URL or path prefix to audit' },
+        design_system: { type: 'string', description: 'Target design system name (e.g., "Frescopa design system")' },
+        scope: { type: 'string', description: 'Scope of audit', enum: ['single-page', 'section', 'full-site'] },
+        dry_run: { type: 'boolean', description: 'If true, returns report only without making changes (default true)' },
+      },
+      required: ['site_url'],
+    },
+  },
+
+  /* ─── Governance Agent (extended) ─── */
+
+  {
+    name: 'get_brand_guidelines',
+    description: 'Governance Agent — Retrieve brand guidelines for the current customer/site. Returns brand voice, color palette, typography rules, logo usage, imagery guidelines, and tone requirements.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        site_id: { type: 'string', description: 'Site to get guidelines for' },
+        category: { type: 'string', description: 'Specific guideline category', enum: ['all', 'voice', 'colors', 'typography', 'imagery', 'logo', 'tone'] },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'check_asset_expiry',
+    description: 'Governance Agent — Check for assets nearing or past their expiration dates. Returns assets with expiry status, DRM flags, and recommended actions.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        folder: { type: 'string', description: 'DAM folder path to check (e.g., "/content/dam/2026/09/fleetraven71517")' },
+        days_until_expiry: { type: 'number', description: 'Show assets expiring within N days (default 30)' },
+        include_expired: { type: 'boolean', description: 'Include already-expired assets (default true)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'audit_content',
+    description: 'Governance Agent — Audit content for staleness, compliance, and publishing status. Finds content fragments, pages, or assets that have not been updated within a specified period. Reports publishing status, last modified dates, and ownership.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        content_type: { type: 'string', description: 'What to audit', enum: ['content-fragments', 'pages', 'assets', 'all'] },
+        stale_days: { type: 'number', description: 'Content not updated in N days (default 90)' },
+        status_filter: { type: 'string', description: 'Filter by publishing status', enum: ['published', 'unpublished', 'all'] },
+        path: { type: 'string', description: 'Content path to scope the audit' },
+      },
+      required: ['content_type'],
+    },
+  },
+
+  /* ─── Content Optimization Agent (extended) ─── */
+
+  {
+    name: 'transform_image',
+    description: 'Content Optimization Agent — Transform an image with crop, mirror, resize, rotate, format conversion, or quality adjustment. Uses Dynamic Media + OpenAPI for non-destructive transforms.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        asset_path: { type: 'string', description: 'Source asset DAM path or delivery URL' },
+        operations: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Operations to apply in order: "crop:1080x1080", "mirror:horizontal", "mirror:vertical", "rotate:90", "resize:1920x1080", "format:webp", "quality:90"',
+        },
+        smart_crop: { type: 'string', description: 'Named smart crop profile (e.g., "square", "portrait", "landscape", "vertical")' },
+        output_format: { type: 'string', description: 'Output format', enum: ['jpeg', 'png', 'webp', 'tiff', 'original'] },
+        quality: { type: 'number', description: 'Output quality 1-100 (default 85)' },
+      },
+      required: ['asset_path'],
+    },
+  },
+  {
+    name: 'create_image_renditions',
+    description: 'Content Optimization Agent — Generate multiple image renditions for different channels and formats in batch. Creates social media, web, mobile, and print renditions from a single source asset.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        asset_path: { type: 'string', description: 'Source asset DAM path or delivery URL' },
+        renditions: {
+          type: 'array',
+          items: { type: 'object' },
+          description: 'Array of rendition specs: [{ name, width, height, format, quality, channel }]',
+        },
+        channels: {
+          type: 'array',
+          items: { type: 'string', enum: ['instagram', 'facebook', 'twitter', 'linkedin', 'web-banner', 'mobile', 'print', 'email'] },
+          description: 'Auto-generate standard sizes for these channels',
+        },
+      },
+      required: ['asset_path'],
+    },
+  },
+
+  /* ─── Discovery Agent (extended) ─── */
+
+  {
+    name: 'add_to_collection',
+    description: 'Discovery Agent — Add assets to a DAM collection for campaign organization. Creates the collection if it does not exist.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        collection_name: { type: 'string', description: 'Collection name (e.g., "Spring 2026 Campaign")' },
+        asset_paths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of asset paths to add to the collection',
+        },
+        create_if_missing: { type: 'boolean', description: 'Create collection if it does not exist (default true)' },
+      },
+      required: ['collection_name', 'asset_paths'],
     },
   },
 ];
@@ -397,8 +571,22 @@ export const TOOL_AGENT_MAP = {
   generate_image_variations: 'Firefly Agent',
   // Development / Cloud Manager
   get_pipeline_status: 'Development Agent',
+  analyze_pipeline_failure: 'Development Agent',
   // Acrobat MCP
   extract_pdf_content: 'Acrobat MCP',
+  // Experience Production Agent (extended)
+  translate_page: 'Experience Production Agent',
+  create_form: 'Experience Production Agent',
+  modernize_content: 'Experience Production Agent',
+  // Governance Agent (extended)
+  get_brand_guidelines: 'Governance Agent',
+  check_asset_expiry: 'Governance Agent',
+  audit_content: 'Governance Agent',
+  // Content Optimization Agent (extended)
+  transform_image: 'Content Optimization Agent',
+  create_image_renditions: 'Content Optimization Agent',
+  // Discovery Agent (extended)
+  add_to_collection: 'Discovery Agent',
 };
 
 /* ── Client-Side Tool Executor ── */
@@ -509,21 +697,35 @@ async function executeTool(name, input) {
 
     case 'search_dam_assets': {
       const dam = profile.damTaxonomy || { root: '/content/dam', folders: ['images', 'brand'], namingConvention: 'asset-name' };
-      const limit = input.limit || 5;
+      const limit = input.limit || 6;
       const query = input.query || '';
       const type = input.asset_type || 'image';
+      const searchFolder = input.folder || dam.root;
+      const tags = input.tags || [];
+      const dateRange = input.date_range || '';
+      const exclude = input.exclude || '';
 
       // Generate contextual asset results based on the query and customer DAM
       const keywords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      // Remove excluded keywords from results
+      const excludeWords = exclude.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      const filteredKeywords = keywords.filter((k) => !excludeWords.some((e) => k.includes(e)));
+      const useKeywords = filteredKeywords.length > 0 ? filteredKeywords : (keywords.length > 0 ? keywords : ['asset']);
+
       const assets = [];
       for (let i = 0; i < limit; i++) {
         const folder = dam.folders[i % dam.folders.length];
-        const keyword = keywords[i % keywords.length] || 'asset';
-        const assetName = `${keyword}-${folder}-${String(i + 1).padStart(2, '0')}`;
+        const keyword = useKeywords[i % useKeywords.length] || 'asset';
+        const tagSuffix = tags.length > 0 ? `-${tags[i % tags.length]}` : '';
+        const assetName = `${keyword}-${folder}${tagSuffix}-${String(i + 1).padStart(2, '0')}`;
         const dmDeliveryUrl = `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/${assetName}/asset-${i + 1}.webp?width=1200&quality=85`;
 
+        // Date within range
+        const maxAge = dateRange.includes('6 month') ? 180 : dateRange.includes('12 month') ? 365 : 90;
+        const uploadDate = new Date(Date.now() - Math.random() * maxAge * 86400000);
+
         assets.push({
-          path: `${dam.root}/${folder}/${assetName}.jpg`,
+          path: `${searchFolder}/${folder}/${assetName}.jpg`,
           name: `${assetName}.jpg`,
           title: `${keyword.charAt(0).toUpperCase() + keyword.slice(1)} — ${folder}`,
           type,
@@ -532,22 +734,32 @@ async function executeTool(name, input) {
           delivery_url: dmDeliveryUrl,
           dynamic_media_url: dmDeliveryUrl,
           status: 'approved',
+          rights_safe: true,
+          tags: [...tags, keyword, folder],
           metadata: {
             dc_title: `${keyword} ${folder} asset`,
             dc_description: `Approved ${type} asset matching: ${query.slice(0, 80)}`,
             dam_status: 'approved',
             dam_expiry: 'none',
+            upload_date: uploadDate.toISOString().split('T')[0],
           },
-          last_modified: new Date(Date.now() - Math.random() * 30 * 86400000).toISOString().split('T')[0],
+          last_modified: uploadDate.toISOString().split('T')[0],
         });
       }
 
       return JSON.stringify({
         query: input.query,
         total_results: assets.length,
-        filter: { type, approved_only: input.approved_only !== false },
+        filter: {
+          type,
+          approved_only: input.approved_only !== false,
+          folder: searchFolder,
+          tags: tags.length > 0 ? tags : undefined,
+          date_range: dateRange || undefined,
+          excluded: exclude || undefined,
+        },
         assets,
-        message: `Found ${assets.length} approved ${type}(s) matching "${query.slice(0, 50)}"`,
+        message: `Found ${assets.length} approved ${type}(s) matching "${query.slice(0, 50)}"${tags.length > 0 ? ` tagged [${tags.join(', ')}]` : ''}${dateRange ? ` from ${dateRange}` : ''}${exclude ? ` (excluding: ${exclude})` : ''}`,
       }, null, 2);
     }
 
@@ -953,6 +1165,8 @@ async function executeTool(name, input) {
 
     case 'get_pipeline_status': {
       const env = input.environment || 'prod';
+      const statusFilter = input.status_filter || null;
+      const programName = input.program_name || null;
       const pipelines = [
         {
           pipeline_id: 'pipe-fullstack-01',
@@ -964,6 +1178,7 @@ async function executeTool(name, input) {
           duration_min: 42,
           commit: 'edfba4f',
           trigger: 'git push (main)',
+          program: profile.name || 'AEM Program',
         },
         {
           pipeline_id: 'pipe-frontend-01',
@@ -975,6 +1190,7 @@ async function executeTool(name, input) {
           duration_min: 3,
           commit: 'edfba4f',
           trigger: 'Code Sync (automatic)',
+          program: profile.name || 'AEM Program',
         },
         {
           pipeline_id: 'pipe-stage-01',
@@ -986,19 +1202,53 @@ async function executeTool(name, input) {
           duration_min: null,
           commit: 'latest',
           trigger: 'manual',
+          program: profile.name || 'AEM Program',
+        },
+        {
+          pipeline_id: 'pipe-fullstack-02',
+          name: 'Nightly Build Pipeline',
+          type: 'fullStack',
+          environment: 'dev',
+          status: 'failed',
+          last_run: new Date(Date.now() - 6 * 3600000).toISOString(),
+          duration_min: 18,
+          commit: 'a3b7c9d',
+          trigger: 'scheduled (nightly)',
+          program: profile.name || 'AEM Program',
+          failure_reason: 'Unit test failure in ContentFragmentServlet',
+          failed_step: 'build',
+          error_log_excerpt: 'java.lang.AssertionError: Expected 200 but got 500 at ContentFragmentServletTest.java:142',
         },
       ];
 
-      const filtered = input.pipeline_id
-        ? pipelines.filter((p) => p.pipeline_id === input.pipeline_id)
-        : pipelines.filter((p) => env === 'all' || p.environment === env);
+      let filtered = pipelines;
+
+      // Filter by pipeline_id first
+      if (input.pipeline_id) {
+        filtered = filtered.filter((p) => p.pipeline_id === input.pipeline_id);
+      } else {
+        // Filter by environment
+        if (env !== 'all') filtered = filtered.filter((p) => p.environment === env);
+      }
+
+      // Filter by status
+      if (statusFilter) {
+        filtered = filtered.filter((p) => p.status === statusFilter);
+      }
+
+      // Filter by program name
+      if (programName) {
+        filtered = filtered.filter((p) => p.program.toLowerCase().includes(programName.toLowerCase()));
+      }
 
       return JSON.stringify({
         environment: env,
+        status_filter: statusFilter,
         program: profile.name || 'AEM Program',
         pipelines: filtered,
+        total_found: filtered.length,
         environment_health: {
-          status: 'healthy',
+          status: filtered.some((p) => p.status === 'failed') ? 'degraded' : 'healthy',
           instances: env === 'prod' ? 3 : 1,
           uptime: '99.97%',
           last_deployment: filtered[0]?.last_run || 'unknown',
@@ -1041,6 +1291,414 @@ async function executeTool(name, input) {
       }, null, 2);
     }
 
+    /* ─── Development Agent: Pipeline Failure Analysis ─── */
+
+    case 'analyze_pipeline_failure': {
+      const programName = input.program_name || profile.name || 'Main Program';
+      return JSON.stringify({
+        status: 'analyzed',
+        program: programName,
+        pipeline: {
+          pipeline_id: input.pipeline_id || 'pipe-fullstack-01',
+          name: 'Full-Stack Production Pipeline',
+          run_id: `run-${Date.now().toString(36)}`,
+          status: 'failed',
+          failed_at: new Date(Date.now() - 4 * 3600000).toISOString(),
+          duration_min: 18,
+        },
+        failure_analysis: {
+          phase: 'build',
+          root_cause: 'Unit test failure in core module',
+          error_summary: 'com.adobe.aem.core.models.HeroModelTest — testGetTitle FAILED: Expected "Welcome" but was null',
+          confidence: '92%',
+        },
+        log_excerpts: input.include_logs !== false ? [
+          { phase: 'build', level: 'ERROR', message: 'Test com.adobe.aem.core.models.HeroModelTest#testGetTitle FAILED' },
+          { phase: 'build', level: 'ERROR', message: 'java.lang.AssertionError: Expected "Welcome" but was null' },
+          { phase: 'build', level: 'INFO', message: 'BUILD FAILURE — 1 test failed out of 247' },
+        ] : [],
+        remediation: {
+          recommended_action: 'Fix the HeroModel.getTitle() method — it returns null when the resource has no jcr:title property',
+          auto_fixable: false,
+          similar_failures: 2,
+          last_success: new Date(Date.now() - 48 * 3600000).toISOString(),
+        },
+        source: 'Cloud Manager API via Development Agent',
+      }, null, 2);
+    }
+
+    /* ─── Experience Production Agent: Translate Page ─── */
+
+    case 'translate_page': {
+      const langNames = { es: 'Spanish', fr: 'French', de: 'German', ja: 'Japanese', 'pt-br': 'Brazilian Portuguese', it: 'Italian', ko: 'Korean', zh: 'Chinese' };
+      const lang = input.target_language || 'es';
+      const langName = langNames[lang] || lang;
+      const sourcePath = input.page_url?.replace(/https?:\/\/[^/]+/, '') || '/index';
+      const targetPath = input.language_tree_path || `/content/${input.site_id || 'site'}/${lang}${sourcePath}`;
+
+      return JSON.stringify({
+        status: 'translated',
+        source_page: input.page_url,
+        source_language: 'en',
+        target_language: lang,
+        target_language_name: langName,
+        target_path: targetPath,
+        preview_url: `${input.page_url?.replace(/\/[^/]+$/, '') || 'https://main--site--org.aem.page'}${targetPath}`,
+        translation_provider: 'Adobe AI Translation + AEM Translation Framework',
+        word_count: Math.floor(500 + Math.random() * 2000),
+        segments_translated: Math.floor(30 + Math.random() * 100),
+        quality_score: `${(88 + Math.random() * 10).toFixed(1)}%`,
+        review_status: 'pending_review',
+        message: `Page translated to ${langName} and placed at ${targetPath}. Translation quality: ${(88 + Math.random() * 10).toFixed(1)}%. Pending human review.`,
+      }, null, 2);
+    }
+
+    /* ─── Experience Production Agent: Create Form ─── */
+
+    case 'create_form': {
+      const formId = `form-${Date.now().toString(36)}`;
+      const formType = input.form_type || 'custom';
+      const defaultFields = {
+        contact: [
+          { name: 'name', type: 'text', label: 'Full Name', required: true },
+          { name: 'email', type: 'email', label: 'Email Address', required: true },
+          { name: 'phone', type: 'tel', label: 'Phone Number', required: false },
+          { name: 'message', type: 'textarea', label: 'Message', required: true },
+        ],
+        'lead-gen': [
+          { name: 'firstName', type: 'text', label: 'First Name', required: true },
+          { name: 'lastName', type: 'text', label: 'Last Name', required: true },
+          { name: 'email', type: 'email', label: 'Work Email', required: true },
+          { name: 'company', type: 'text', label: 'Company', required: true },
+          { name: 'jobTitle', type: 'text', label: 'Job Title', required: false },
+          { name: 'interest', type: 'select', label: 'Area of Interest', required: true, options: ['AEM Sites', 'AEM Assets', 'Analytics', 'Target', 'Other'] },
+        ],
+        newsletter: [
+          { name: 'email', type: 'email', label: 'Email Address', required: true },
+          { name: 'preferences', type: 'checkbox', label: 'Content Preferences', options: ['Product Updates', 'Best Practices', 'Events', 'Case Studies'] },
+        ],
+      };
+      const fields = input.fields || defaultFields[formType] || defaultFields.contact;
+
+      return JSON.stringify({
+        status: 'created',
+        form_id: formId,
+        form_type: formType,
+        description: input.description,
+        fields,
+        field_count: fields.length,
+        submit_action: input.submit_action || 'spreadsheet',
+        page_path: input.page_path || '/forms/' + formId,
+        eds_block: 'form',
+        spreadsheet_url: `https://main--${profile.repo || 'site'}--${(profile.orgId || 'org').toLowerCase()}.aem.live/forms/${formId}.json`,
+        message: `Form "${input.description}" created with ${fields.length} fields. Type: ${formType}. Submits to: ${input.submit_action || 'spreadsheet'}.`,
+        source: 'Experience Production Agent — Form Builder',
+      }, null, 2);
+    }
+
+    /* ─── Experience Production Agent: Modernize Content ─── */
+
+    case 'modernize_content': {
+      const scope = input.scope || 'full-site';
+      const isDryRun = input.dry_run !== false;
+      const designSystem = input.design_system || 'default';
+      const pagesScanned = scope === 'single-page' ? 1 : scope === 'section' ? 5 : Math.floor(15 + Math.random() * 30);
+
+      return JSON.stringify({
+        status: isDryRun ? 'dry-run-complete' : 'modernization-applied',
+        site: input.site_url,
+        design_system: designSystem,
+        scope,
+        pages_scanned: pagesScanned,
+        report: {
+          total_components: Math.floor(pagesScanned * 8),
+          needs_update: Math.floor(pagesScanned * 3),
+          already_compliant: Math.floor(pagesScanned * 5),
+          categories: [
+            { category: 'Hero blocks', total: pagesScanned, needs_update: Math.floor(pagesScanned * 0.3), issue: 'Legacy image sizing, missing responsive breakpoints' },
+            { category: 'Cards blocks', total: Math.floor(pagesScanned * 0.8), needs_update: Math.floor(pagesScanned * 0.2), issue: 'Non-standard card grid spacing' },
+            { category: 'Typography', total: pagesScanned, needs_update: Math.floor(pagesScanned * 0.4), issue: 'Font-size tokens not using design system variables' },
+            { category: 'Color tokens', total: pagesScanned, needs_update: Math.floor(pagesScanned * 0.15), issue: 'Hardcoded hex values instead of CSS custom properties' },
+            { category: 'Section metadata', total: Math.floor(pagesScanned * 0.6), needs_update: Math.floor(pagesScanned * 0.1), issue: 'Missing section style classes' },
+          ],
+        },
+        recommended_actions: [
+          'Update hero blocks to use responsive image sizing pattern',
+          'Replace hardcoded colors with CSS custom properties from design system',
+          'Apply updated card grid spacing (gap: var(--spacing-m))',
+          'Add section metadata styles for consistent section theming',
+        ],
+        message: isDryRun
+          ? `Dry-run complete. ${pagesScanned} pages scanned, ${Math.floor(pagesScanned * 3)} components need updates to match ${designSystem}.`
+          : `Modernization applied to ${pagesScanned} pages. ${Math.floor(pagesScanned * 3)} components updated.`,
+        source: 'Experience Production Agent — Content Modernizer',
+      }, null, 2);
+    }
+
+    /* ─── Governance Agent: Brand Guidelines ─── */
+
+    case 'get_brand_guidelines': {
+      const brandVoice = profile.brandVoice || {};
+      const category = input.category || 'all';
+
+      const guidelines = {
+        voice: {
+          tone: brandVoice.tone || 'Professional, warm, authoritative',
+          personality: brandVoice.personality || 'Knowledgeable expert who is approachable',
+          do: brandVoice.do || ['Use active voice', 'Be concise', 'Lead with benefits', 'Use customer-centric language'],
+          dont: brandVoice.avoided || ['Avoid jargon', 'No passive voice', 'Never use competitor names', 'Avoid superlatives without data'],
+        },
+        colors: {
+          primary: brandVoice.colorPalette?.primary || '#EB1000',
+          secondary: brandVoice.colorPalette?.secondary || '#2C2C2C',
+          accent: brandVoice.colorPalette?.accent || '#1473E6',
+          background: '#FFFFFF',
+          text: '#2C2C2C',
+          rules: ['Primary color for CTAs and headings only', 'Never use primary on dark backgrounds', 'Maintain 4.5:1 contrast ratio minimum'],
+        },
+        typography: {
+          heading_font: 'Adobe Clean',
+          body_font: 'Adobe Clean',
+          heading_sizes: { h1: '40px', h2: '32px', h3: '24px', h4: '20px' },
+          body_size: '16px',
+          line_height: '1.6',
+          rules: ['Never use more than 2 font weights per page', 'Body text minimum 16px for readability'],
+        },
+        imagery: {
+          style: 'Authentic, diverse, lifestyle-driven',
+          requirements: ['All images must have descriptive alt text', 'Minimum resolution 2x for retina displays', 'Use WebP format with JPEG fallback'],
+          restrictions: ['No stock photo watermarks', 'No competitor products visible', 'All people in images must have signed model releases'],
+        },
+        logo: {
+          clear_space: 'Minimum 20px clear space around logo',
+          min_size: '32px height minimum',
+          allowed_versions: ['Full color on white', 'White on dark', 'Black on light'],
+          restrictions: ['Never stretch or distort', 'Never change logo colors', 'Never place on busy backgrounds'],
+        },
+      };
+
+      const result = category === 'all' ? guidelines : { [category]: guidelines[category] };
+
+      return JSON.stringify({
+        customer: profile.name || 'Current Customer',
+        guidelines: result,
+        last_updated: new Date(Date.now() - 15 * 86400000).toISOString().split('T')[0],
+        source: 'Governance Agent — Brand Guidelines Repository',
+        message: category === 'all'
+          ? `Complete brand guidelines for ${profile.name}. Covers voice, colors, typography, imagery, and logo.`
+          : `${category.charAt(0).toUpperCase() + category.slice(1)} guidelines for ${profile.name}.`,
+      }, null, 2);
+    }
+
+    /* ─── Governance Agent: Asset Expiry ─── */
+
+    case 'check_asset_expiry': {
+      const days = input.days_until_expiry || 30;
+      const folder = input.folder || '/content/dam';
+      const includeExpired = input.include_expired !== false;
+
+      const assets = [];
+      const expiringCount = Math.floor(3 + Math.random() * 5);
+      const expiredCount = includeExpired ? Math.floor(1 + Math.random() * 3) : 0;
+
+      for (let i = 0; i < expiringCount; i++) {
+        const daysLeft = Math.floor(Math.random() * days);
+        assets.push({
+          path: `${folder}/campaign-asset-${String(i + 1).padStart(2, '0')}.jpg`,
+          name: `campaign-asset-${String(i + 1).padStart(2, '0')}.jpg`,
+          status: 'expiring',
+          expires_at: new Date(Date.now() + daysLeft * 86400000).toISOString().split('T')[0],
+          days_remaining: daysLeft,
+          license_type: ['royalty-free', 'rights-managed', 'editorial'][i % 3],
+          usage_count: Math.floor(1 + Math.random() * 10),
+          action_required: daysLeft < 7 ? 'urgent-renewal' : 'schedule-renewal',
+        });
+      }
+
+      for (let i = 0; i < expiredCount; i++) {
+        assets.push({
+          path: `${folder}/expired-asset-${String(i + 1).padStart(2, '0')}.jpg`,
+          name: `expired-asset-${String(i + 1).padStart(2, '0')}.jpg`,
+          status: 'expired',
+          expires_at: new Date(Date.now() - Math.floor(Math.random() * 30) * 86400000).toISOString().split('T')[0],
+          days_remaining: 0,
+          license_type: 'rights-managed',
+          usage_count: Math.floor(1 + Math.random() * 5),
+          action_required: 'immediate-removal',
+          published_pages: Math.floor(1 + Math.random() * 3),
+        });
+      }
+
+      return JSON.stringify({
+        folder,
+        scan_window_days: days,
+        total_assets_scanned: Math.floor(50 + Math.random() * 200),
+        expiring: assets.filter((a) => a.status === 'expiring'),
+        expired: assets.filter((a) => a.status === 'expired'),
+        summary: {
+          expiring_count: expiringCount,
+          expired_count: expiredCount,
+          urgent_count: assets.filter((a) => a.days_remaining < 7 && a.days_remaining > 0).length,
+        },
+        message: `Found ${expiringCount} assets expiring within ${days} days${includeExpired ? ` and ${expiredCount} already expired` : ''}. ${assets.filter((a) => a.action_required === 'immediate-removal').length} require immediate action.`,
+        source: 'Governance Agent — DRM & Asset Expiry',
+      }, null, 2);
+    }
+
+    /* ─── Governance Agent: Content Audit ─── */
+
+    case 'audit_content': {
+      const contentType = input.content_type || 'content-fragments';
+      const staleDays = input.stale_days || 90;
+      const statusFilter = input.status_filter || 'published';
+
+      const staleItems = [];
+      const itemCount = Math.floor(5 + Math.random() * 10);
+      for (let i = 0; i < itemCount; i++) {
+        const daysSinceUpdate = staleDays + Math.floor(Math.random() * 180);
+        staleItems.push({
+          path: `/content/${contentType === 'content-fragments' ? 'dam/fragments' : contentType === 'pages' ? 'site/en' : 'dam'}/${contentType}-${String(i + 1).padStart(3, '0')}`,
+          title: `${contentType === 'content-fragments' ? 'Fragment' : contentType === 'pages' ? 'Page' : 'Asset'} #${i + 1}`,
+          type: contentType,
+          last_modified: new Date(Date.now() - daysSinceUpdate * 86400000).toISOString().split('T')[0],
+          days_since_update: daysSinceUpdate,
+          published: statusFilter === 'published' || Math.random() > 0.3,
+          author: ['content-author', 'admin', 'marketing-team'][i % 3],
+          status: daysSinceUpdate > staleDays * 2 ? 'critical' : 'stale',
+        });
+      }
+
+      return JSON.stringify({
+        content_type: contentType,
+        stale_threshold_days: staleDays,
+        status_filter: statusFilter,
+        total_scanned: Math.floor(50 + Math.random() * 200),
+        stale_items: staleItems,
+        summary: {
+          total_stale: itemCount,
+          critical: staleItems.filter((i) => i.status === 'critical').length,
+          still_published: staleItems.filter((i) => i.published).length,
+        },
+        recommendations: [
+          `Review and update ${staleItems.filter((i) => i.status === 'critical').length} critical items (over ${staleDays * 2} days stale)`,
+          `Consider unpublishing ${staleItems.filter((i) => i.published).length} stale items that are still live`,
+          'Set up automated staleness alerts for content governance',
+        ],
+        message: `Found ${itemCount} stale ${contentType} not updated in ${staleDays}+ days. ${staleItems.filter((i) => i.published).length} are still published.`,
+        source: 'Governance Agent — Content Audit',
+      }, null, 2);
+    }
+
+    /* ─── Content Optimization Agent: Transform Image ─── */
+
+    case 'transform_image': {
+      const ops = input.operations || [];
+      const smartCrop = input.smart_crop;
+      const format = input.output_format || 'webp';
+      const quality = input.quality || 85;
+      const assetName = input.asset_path?.split('/').pop()?.replace(/\.[^.]+$/, '') || 'transformed';
+
+      // Build DM URL with transformation parameters
+      let dmParams = `quality=${quality}`;
+      if (smartCrop) dmParams += `&crop=${smartCrop}`;
+      ops.forEach((op) => {
+        if (op.startsWith('resize:')) {
+          const [w, h] = op.slice(7).split('x');
+          dmParams += `&width=${w}`;
+          if (h) dmParams += `&height=${h}`;
+        }
+        if (op.startsWith('crop:')) dmParams += `&crop=${op.slice(5)}`;
+        if (op.startsWith('rotate:')) dmParams += `&rotate=${op.slice(7)}`;
+        if (op.startsWith('mirror:')) dmParams += `&flip=${op.slice(7)}`;
+      });
+
+      const deliveryUrl = `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/${assetName}/transformed.${format}?${dmParams}`;
+
+      return JSON.stringify({
+        status: 'transformed',
+        source_asset: input.asset_path,
+        operations_applied: [...ops, ...(smartCrop ? [`smart-crop:${smartCrop}`] : [])],
+        output: {
+          delivery_url: deliveryUrl,
+          format,
+          quality,
+          dam_path: `/content/dam/transformed/${assetName}-transformed.${format}`,
+        },
+        message: `Image transformed: ${ops.length + (smartCrop ? 1 : 0)} operation(s) applied. Delivered as ${format.toUpperCase()} at ${quality}% quality via Dynamic Media.`,
+        source: 'Content Optimization Agent — Dynamic Media + OpenAPI',
+      }, null, 2);
+    }
+
+    /* ─── Content Optimization Agent: Batch Renditions ─── */
+
+    case 'create_image_renditions': {
+      const assetName = input.asset_path?.split('/').pop()?.replace(/\.[^.]+$/, '') || 'source';
+      const channelSpecs = {
+        instagram: [{ name: 'Instagram Story', width: 1080, height: 1920, format: 'jpeg', quality: 90 }, { name: 'Instagram Post', width: 1080, height: 1080, format: 'jpeg', quality: 90 }],
+        facebook: [{ name: 'Facebook Post', width: 1200, height: 630, format: 'jpeg', quality: 85 }],
+        twitter: [{ name: 'Twitter/X Post', width: 1200, height: 675, format: 'jpeg', quality: 85 }],
+        linkedin: [{ name: 'LinkedIn Post', width: 1200, height: 628, format: 'jpeg', quality: 85 }],
+        'web-banner': [{ name: 'Web Banner', width: 1920, height: 1080, format: 'webp', quality: 85 }],
+        mobile: [{ name: 'Mobile Portrait', width: 1080, height: 1920, format: 'webp', quality: 85 }],
+        email: [{ name: 'Email Header', width: 600, height: 200, format: 'jpeg', quality: 80 }],
+      };
+
+      let specs = input.renditions || [];
+      if (input.channels?.length > 0) {
+        input.channels.forEach((ch) => {
+          if (channelSpecs[ch]) specs.push(...channelSpecs[ch]);
+        });
+      }
+      if (specs.length === 0) {
+        specs = [
+          { name: 'Web Banner', width: 1920, height: 1080, format: 'webp', quality: 85 },
+          { name: 'Social Square', width: 1080, height: 1080, format: 'jpeg', quality: 90 },
+          { name: 'Mobile Portrait', width: 1080, height: 1920, format: 'jpeg', quality: 85 },
+        ];
+      }
+
+      const renditions = specs.map((spec, i) => ({
+        name: spec.name || spec.channel || `Rendition ${i + 1}`,
+        width: spec.width,
+        height: spec.height,
+        format: spec.format || 'webp',
+        quality: spec.quality || 85,
+        delivery_url: `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/${assetName}/${(spec.name || `rendition-${i}`).toLowerCase().replace(/\s+/g, '-')}.${spec.format || 'webp'}?width=${spec.width}&height=${spec.height}&quality=${spec.quality || 85}`,
+        dam_path: `/content/dam/renditions/${assetName}/${(spec.name || `rendition-${i}`).toLowerCase().replace(/\s+/g, '-')}.${spec.format || 'webp'}`,
+        file_size_estimate: `${Math.floor(spec.width * spec.height * 0.3 / 1024)}kb`,
+      }));
+
+      return JSON.stringify({
+        status: 'created',
+        source_asset: input.asset_path,
+        renditions,
+        total_renditions: renditions.length,
+        channels: input.channels || [],
+        message: `${renditions.length} rendition(s) created from ${assetName}. All saved to DAM and available via Dynamic Media delivery URLs.`,
+        source: 'Content Optimization Agent — Dynamic Media Renditions',
+      }, null, 2);
+    }
+
+    /* ─── Discovery Agent: Add to Collection ─── */
+
+    case 'add_to_collection': {
+      const collectionId = `col-${Date.now().toString(36)}`;
+      const assetCount = input.asset_paths?.length || 0;
+
+      return JSON.stringify({
+        status: input.create_if_missing !== false ? 'created_and_added' : 'added',
+        collection: {
+          id: collectionId,
+          name: input.collection_name,
+          path: `/content/dam/collections/${input.collection_name.toLowerCase().replace(/\s+/g, '-')}`,
+          asset_count: assetCount,
+        },
+        assets_added: input.asset_paths || [],
+        message: `${assetCount} asset(s) added to collection "${input.collection_name}". Collection ${input.create_if_missing !== false ? 'created and ' : ''}ready for campaign use.`,
+        source: 'Discovery Agent — DAM Collections',
+      }, null, 2);
+    }
+
     default:
       return JSON.stringify({ error: `Unknown tool: ${name}` });
   }
@@ -1054,7 +1712,7 @@ const AEM_SYSTEM_PROMPT = `You are the **Experience Workspace AI** — an expert
 You are the AI brain behind AEM's agentic content supply chain. You orchestrate specialized agents (Governance, Content Optimization, Discovery, Audience, Analytics) and deeply understand AEM Edge Delivery Services architecture.
 
 ## Your MCP Tools — Adobe AI Agent Toolbelt
-You have 15 tools spanning 8 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
+You have 31 tools spanning 12 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
 
 ### AEM Content MCP (content read/write)
 - **get_aem_sites** — Discover all AEM Edge Delivery sites. Call first when users mention any site.
@@ -1065,17 +1723,23 @@ You have 15 tools spanning 8 Adobe AI Agents. USE THEM when relevant — the AI 
 - **create_aem_launch** — Create a Launch (review branch) as a governance gate before publishing.
 - **promote_aem_launch** — Promote a Launch to publish live (only after governance approval).
 
-### Discovery Agent (DAM search)
-- **search_dam_assets** — Natural language search across AEM Assets (DAM). Returns approved assets with Dynamic Media delivery URLs.
+### Discovery Agent (DAM search & collections)
+- **search_dam_assets** — Natural language search across AEM Assets (DAM). Supports filters: date_range (e.g., "last 30 days"), tags (array), folder path, exclude terms. Returns approved assets with Dynamic Media delivery URLs.
+- **add_to_collection** — Add one or more assets to an AEM Assets collection. Creates the collection if it doesn't exist.
 
-### Governance Agent (compliance)
+### Governance Agent (compliance, brand, DRM)
 - **run_governance_check** — Brand compliance, metadata enforcement, WCAG 2.1 AA accessibility, legal, SEO, and DRM checks. Returns pass/fail with detailed findings.
+- **get_brand_guidelines** — Retrieve brand guidelines for a specific brand including voice, tone, colors, typography, logo usage, and do/don't rules.
+- **check_asset_expiry** — Check DRM, licensing, and expiration status of assets. Returns rights status, license type, expiry dates, and usage restrictions.
+- **audit_content** — Run a deep content audit on a page. Checks readability, tone of voice, inclusive language, content freshness, and provides rewrite suggestions.
 
 ### Audience Agent (AEP segments)
 - **get_audience_segments** — List, create, or get audience segments from AEP. Returns segment definitions and activation status.
 
 ### Content Optimization Agent (Dynamic Media + OpenAPI)
 - **create_content_variant** — Generate a content variant for a specific audience segment. Uses Dynamic Media for image transformations.
+- **transform_image** — Apply transformations to an image: crop, mirror, resize, rotate, adjust quality, change format. Returns Dynamic Media delivery URL with applied transforms.
+- **create_image_renditions** — Generate multiple renditions of an image for different channels (web, mobile, social, email, print). Returns all rendition URLs with dimensions.
 
 ### Data Insights Agent (CJA)
 - **get_analytics_insights** — Query CJA for page performance, audience behavior, and conversion data.
@@ -1086,8 +1750,11 @@ You have 15 tools spanning 8 Adobe AI Agents. USE THEM when relevant — the AI 
 ### Workfront WOA (workflow)
 - **create_workfront_task** — Create review/approval tasks in Workfront. Assigns to approval chain from customer profile.
 
-### Experience Production Agent (brief extraction)
+### Experience Production Agent (content creation & transformation)
 - **extract_brief_content** — Extract structured content from an uploaded brief (PDF/Word).
+- **translate_page** — Translate an AEM page to a target language. Preserves block structure, metadata, and formatting.
+- **create_form** — Create an AEM form from a description. Generates fields, validation rules, and submit actions.
+- **modernize_content** — Modernize outdated page content. Updates language, refreshes statistics, improves readability, and aligns with current brand voice.
 
 ### Target Agent (A/B Testing & Personalization)
 - **create_ab_test** — Create an A/B test activity with traffic splits, variants, and success metrics.
@@ -1100,36 +1767,44 @@ You have 15 tools spanning 8 Adobe AI Agents. USE THEM when relevant — the AI 
 - **generate_image_variations** — Generate image variations using Adobe Firefly AI. Creates alternate versions with style, mood, or composition changes.
 
 ### Development Agent (Cloud Manager)
-- **get_pipeline_status** — Get deployment pipeline status, build history, and environment health.
+- **get_pipeline_status** — Get deployment pipeline status, build history, and environment health. Supports status_filter (e.g., 'failed') and program_name filter.
+- **analyze_pipeline_failure** — Analyze a failed pipeline execution. Returns root cause, affected step, error logs, and suggested fix.
 
 ### Acrobat MCP (PDF Services)
 - **extract_pdf_content** — Extract structured content from a PDF document (text, tables, images, metadata).
 
 **CRITICAL RULES**:
 1. When users mention a site (like "Frescopa", "SecurBank", "WKND"), ALWAYS call get_aem_sites → get_aem_site_pages → get_page_content to fetch real content. Never guess.
-2. When asked about governance/compliance, call run_governance_check AND get_page_content for real data.
-3. When asked about assets/images, call search_dam_assets. For generating new images, call generate_image_variations.
+2. When asked about governance/compliance, call run_governance_check AND get_page_content for real data. For brand guidelines, call get_brand_guidelines.
+3. When asked about assets/images, call search_dam_assets. Use date_range, tags, folder, and exclude parameters to filter results. For generating new images, call generate_image_variations.
 4. When the user wants to create content, use copy_aem_page + patch_aem_page_content + create_aem_launch for the full workflow.
 5. When you need analytics or performance data, call get_analytics_insights.
 6. For audience/segment questions, call get_audience_segments. For individual profile lookup, call get_customer_profile.
 7. For A/B testing and personalization, use create_ab_test and get_personalization_offers.
-8. For deployment/pipeline status, call get_pipeline_status.
+8. For deployment/pipeline status, call get_pipeline_status. For failed pipelines, call analyze_pipeline_failure with the pipeline_id.
 9. For PDF document extraction, call extract_pdf_content.
 10. For multi-step pipelines (brief → page → governance → publish), chain tools in sequence. You can do up to 8 rounds of tool calls.
+11. For image transformations (crop, mirror, resize), call transform_image. For multi-channel renditions, call create_image_renditions.
+12. For content translation, call translate_page. For form creation, call create_form. For content modernization, call modernize_content.
+13. For asset rights/DRM/expiry checks, call check_asset_expiry. For content quality audits, call audit_content.
+14. For adding assets to collections, call add_to_collection.
 
-## Capabilities — 21 Tools, 12 Agents, Full Adobe Stack
+## Capabilities — 31 Tools, 12 Agents, Full Adobe Stack
 - **Page Analysis**: Analyze EDS pages — structure, blocks, sections, metadata, performance
-- **Governance Compliance**: Brand, legal, WCAG 2.1 AA accessibility, SEO, DRM
-- **Asset Discovery**: Natural language search across DAM with Dynamic Media delivery URLs
+- **Governance Compliance**: Brand guidelines, brand compliance, legal, WCAG 2.1 AA accessibility, SEO, DRM, asset expiry
+- **Content Audit**: Deep content quality audit — readability, tone, inclusivity, freshness, rewrite suggestions
+- **Asset Discovery**: Natural language search across DAM with Dynamic Media delivery URLs, date/tag/folder filtering, collections
 - **Content Production**: Brief extraction → page creation → content patching → launch governance gate
+- **Content Transformation**: Page translation, form creation, content modernization with brand voice alignment
 - **Audience Intelligence**: AEP segment creation, sizing, activation + real-time profile lookup
 - **Content Optimization**: Segment-specific content variants with Dynamic Media renditions
+- **Image Processing**: Crop, mirror, resize, rotate, quality adjust, format conversion, multi-channel renditions
 - **Analytics & Insights**: CJA performance data, conversion metrics, AI-generated recommendations
 - **Journey Orchestration**: AJO journey status, creation, and performance
 - **Workflow Management**: Workfront task creation with approval chain routing
 - **A/B Testing & Personalization**: Target activities, traffic splits, decisioned offers per segment
 - **Generative AI**: Firefly image variations from prompts with DAM integration
-- **DevOps**: Cloud Manager pipeline status, deployment history, environment health
+- **DevOps**: Cloud Manager pipeline status, deployment history, failure analysis, environment health
 - **Document Processing**: PDF extraction via Acrobat MCP (text, tables, images, metadata)
 - **AEM Architecture**: Deep knowledge of EDS blocks, section metadata, content modeling, three-phase loading
 

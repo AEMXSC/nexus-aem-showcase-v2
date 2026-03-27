@@ -301,8 +301,18 @@ function formatToolInput(toolName, input) {
     case 'get_personalization_offers': return `"${input.location || input.segment || ''}"`;
     case 'get_customer_profile': return `"${(input.identity || '').slice(0, 25)}"`;
     case 'generate_image_variations': return `"${(input.prompt || '').slice(0, 25)}"`;
-    case 'get_pipeline_status': return `${input.environment || 'prod'}`;
+    case 'get_pipeline_status': return `${input.environment || 'prod'}${input.status_filter ? ` (${input.status_filter})` : ''}`;
     case 'extract_pdf_content': return `"${input.file_name || 'document.pdf'}"`;
+    case 'translate_page': return `"${input.page_path || ''}" → ${input.target_language || ''}`;
+    case 'create_form': return `"${(input.description || '').slice(0, 30)}"`;
+    case 'modernize_content': return `"${input.page_path || ''}"`;
+    case 'get_brand_guidelines': return `"${input.brand || 'default'}"`;
+    case 'check_asset_expiry': return `"${(input.asset_path || input.query || '').slice(0, 30)}"`;
+    case 'audit_content': return `"${input.page_path || ''}"`;
+    case 'transform_image': return `"${(input.asset_path || '').split('/').pop()}" ${input.action || ''}`;
+    case 'create_image_renditions': return `"${(input.asset_path || '').split('/').pop()}"`;
+    case 'add_to_collection': return `"${(input.collection_name || '').slice(0, 25)}"`;
+    case 'analyze_pipeline_failure': return `"${input.pipeline_id || ''}"`;
     default: {
       const str = JSON.stringify(input);
       return str.length > 40 ? str.slice(0, 37) + '...' : str;
