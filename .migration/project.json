@@ -2,5 +2,6 @@
   "type": "da",
   "contentHostUrl": "https://content.da.live/aemxsc/xscteamsite/",
   "libraryUrl": "https://main--xscteamsite--aemxsc.aem.page/tools/sidekick/library.json",
-  "boilerplate": "xscteamsite"
+  "boilerplate": "xscteamsite",
+  "sourceUrl": "https://main--xscteamsite--aemxsc.aem.page"
 }
