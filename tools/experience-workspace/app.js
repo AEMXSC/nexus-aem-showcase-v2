@@ -268,15 +268,15 @@ const TOOL_RENDERERS = {
     const query = result.query || 'assets';
     const total = result.total_results || assets.length;
     const cards = assets.map((a) => {
-      const thumbUrl = a.delivery_url || a.dynamic_media_url || '';
-      const thumbSrc = thumbUrl ? thumbUrl.replace(/width=\d+/, 'width=400').replace(/quality=\d+/, 'quality=75') : '';
+      const thumbSrc = a.thumbnail_url || a.delivery_url || a.dynamic_media_url || '';
       const name = a.title || a.name || 'Asset';
       const dims = a.dimensions ? `${a.dimensions.width} × ${a.dimensions.height}` : '';
       const date = a.last_modified || a.metadata?.upload_date || '';
       const tags = (a.tags || []).slice(0, 3).map((t) => `<span class="asset-tag">${t}</span>`).join('');
       const statusClass = a.status === 'approved' ? 'approved' : 'review';
+      const linkUrl = a.delivery_url || a.dynamic_media_url || thumbSrc;
       return `
-        <a href="${thumbUrl}" target="_blank" rel="noopener" class="asset-card">
+        <a href="${linkUrl}" target="_blank" rel="noopener" class="asset-card">
           <div class="asset-thumb" style="background-image:url('${thumbSrc}')">
             <span class="asset-status ${statusClass}">${a.status || 'approved'}</span>
           </div>
@@ -875,6 +875,22 @@ function formatToolInput(toolName, input) {
 
 /* ── REAL: Governance Scan ── */
 async function runRealGovernance() {
+  // Guard: check if a page is actually loaded in the preview
+  let hasPage = false;
+  try {
+    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow?.document;
+    if (iframeDoc?.body?.innerHTML?.trim()) hasPage = true;
+  } catch { /* cross-origin — page might still be there */ hasPage = true; }
+  if (!hasPage) {
+    // Try fetching the page HTML to be sure
+    const currentUrl = previewFrame.src || PREVIEW_URL;
+    if (!currentUrl || currentUrl === 'about:blank') {
+      addMessage('user', 'Run governance scan on the current page');
+      addMessage('assistant', 'No page is loaded in the preview. Navigate to a page first, then run the governance scan.', 'Governance Agent');
+      return;
+    }
+  }
+
   addMessage('user', 'Run governance scan on the current page');
 
   // Step 1: Client-side DOM scan

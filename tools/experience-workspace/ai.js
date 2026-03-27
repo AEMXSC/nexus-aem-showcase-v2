@@ -1176,12 +1176,17 @@ async function executeTool(name, input) {
       const filteredKeywords = keywords.filter((k) => !excludeWords.some((e) => k.includes(e)));
       const useKeywords = filteredKeywords.length > 0 ? filteredKeywords : (keywords.length > 0 ? keywords : ['asset']);
 
+      // Stock photo seeds — deterministic thumbnails that actually render
+      const stockSeeds = ['office', 'mountain', 'technology', 'cityscape', 'nature', 'workspace', 'abstract', 'building', 'product', 'team', 'marketing', 'digital'];
+
       const assets = [];
       for (let i = 0; i < limit; i++) {
         const folder = dam.folders[i % dam.folders.length];
         const keyword = useKeywords[i % useKeywords.length] || 'asset';
         const tagSuffix = tags.length > 0 ? `-${tags[i % tags.length]}` : '';
         const assetName = `${keyword}-${folder}${tagSuffix}-${String(i + 1).padStart(2, '0')}`;
+        const seed = `${keyword}-${folder}-${i}`;
+        const thumbUrl = `https://picsum.photos/seed/${encodeURIComponent(seed)}/400/267`;
         const dmDeliveryUrl = `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/${assetName}/asset-${i + 1}.webp?width=1200&quality=85`;
 
         // Stable dates — spread evenly across range
@@ -1195,6 +1200,7 @@ async function executeTool(name, input) {
           type,
           format: 'image/jpeg',
           dimensions: { width: 2400, height: 1600 },
+          thumbnail_url: thumbUrl,
           delivery_url: dmDeliveryUrl,
           dynamic_media_url: dmDeliveryUrl,
           status: 'approved',
@@ -1662,12 +1668,14 @@ async function executeTool(name, input) {
       const ratio = input.aspect_ratio || 'original';
       const variations = [];
 
+      const fireflySeeds = ['firefly-vibrant', 'firefly-dramatic', 'firefly-minimal', 'firefly-bold'];
       for (let i = 0; i < count; i++) {
         const varId = `ff-${Date.now().toString(36)}-${i}`;
+        const seed = `${(input.prompt || 'gen').slice(0, 20).replace(/\s+/g, '-')}-${i}`;
         variations.push({
           variation_id: varId,
           delivery_url: `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/firefly-${varId}/generated.webp?width=1440&quality=90`,
-          thumbnail_url: `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/firefly-${varId}/thumb.webp?width=400&quality=80`,
+          thumbnail_url: `https://picsum.photos/seed/${encodeURIComponent(seed)}/400/400`,
           style_preset: style,
           aspect_ratio: ratio,
           prompt_used: input.prompt,
