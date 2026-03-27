@@ -10,7 +10,8 @@
       { "name": "Steps", "path": "/tools/sidekick/blocks/steps" },
       { "name": "Team", "path": "/tools/sidekick/blocks/team" },
       { "name": "Ticker", "path": "/tools/sidekick/blocks/ticker" },
-      { "name": "Verticals", "path": "/tools/sidekick/blocks/verticals" }
+      { "name": "Verticals", "path": "/tools/sidekick/blocks/verticals" },
+      { "name": "Carousel", "path": "/tools/sidekick/blocks/carousel" }
     ]
   }
 }

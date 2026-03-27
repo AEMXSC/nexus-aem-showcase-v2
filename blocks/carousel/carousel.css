@@ -1,0 +1,133 @@
+/* carousel — auto-advancing slide carousel */
+
+.carousel {
+  position: relative;
+  outline: none;
+}
+
+.carousel-viewport {
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.carousel-track {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  transition: transform 0.5s ease;
+}
+
+.carousel-slide {
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background-color: var(--color-navy);
+  border: 1px solid rgb(255 255 255 / 6%);
+  border-radius: 16px;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+@media (width >= 768px) {
+  .carousel-slide {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.carousel-slide-image {
+  flex: 0 0 45%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.carousel-slide-image picture,
+.carousel-slide-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+
+.carousel-slide-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.carousel-slide-content h2,
+.carousel-slide-content h3 {
+  color: var(--color-white);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.carousel-slide-content p {
+  color: rgb(255 255 255 / 60%);
+  margin: 0;
+  line-height: 1.6;
+  font-size: 0.9375rem;
+}
+
+/* Prev / Next buttons */
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 12%);
+  color: var(--color-white);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  z-index: 2;
+  transition: background 0.2s ease;
+}
+
+.carousel-btn:hover {
+  background: var(--color-red);
+  border-color: var(--color-red);
+}
+
+.carousel-btn-prev {
+  left: -20px;
+}
+
+.carousel-btn-next {
+  right: -20px;
+}
+
+@media (width < 768px) {
+  .carousel-btn-prev { left: 4px; }
+  .carousel-btn-next { right: 4px; }
+}
+
+/* Dots */
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgb(255 255 255 / 25%);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.carousel-dot.is-active {
+  background: var(--color-red);
+  transform: scale(1.3);
+}
