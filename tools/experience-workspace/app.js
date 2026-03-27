@@ -297,6 +297,12 @@ function formatToolInput(toolName, input) {
     case 'get_journey_status': return `${input.action || 'list'}`;
     case 'create_workfront_task': return `"${(input.title || '').slice(0, 30)}"`;
     case 'extract_brief_content': return `"${input.file_name || 'brief'}"`;
+    case 'create_ab_test': return `"${(input.test_name || '').slice(0, 30)}"`;
+    case 'get_personalization_offers': return `"${input.location || input.segment || ''}"`;
+    case 'get_customer_profile': return `"${(input.identity || '').slice(0, 25)}"`;
+    case 'generate_image_variations': return `"${(input.prompt || '').slice(0, 25)}"`;
+    case 'get_pipeline_status': return `${input.environment || 'prod'}`;
+    case 'extract_pdf_content': return `"${input.file_name || 'document.pdf'}"`;
     default: {
       const str = JSON.stringify(input);
       return str.length > 40 ? str.slice(0, 37) + '...' : str;
