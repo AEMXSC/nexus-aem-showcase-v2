@@ -72,6 +72,21 @@ export async function chat(userMessage, context = {}) {
     systemParts.push(`\nCustomer: ${context.customerName}`);
   }
 
+  if (context.org) {
+    const o = context.org;
+    systemParts.push(`\n## Connected AEM Environment
+- **Organization**: ${o.name} (${o.orgId})
+- **Repository**: ${o.repo} (branch: ${o.branch})
+- **Tier**: ${o.tier}
+- **Environment**: ${o.env}
+- **Services**: ${o.services?.join(', ') || 'EDS'}
+- **Preview**: ${o.previewOrigin}
+- **Live**: ${o.liveOrigin}
+- **DA Path**: admin.da.live/source/${o.daOrg}/${o.daRepo}
+
+You are working with the ${o.name} AEM environment. Reference this org context when discussing pages, blocks, publishing, and content operations.`);
+  }
+
   const messages = Array.isArray(userMessage)
     ? userMessage
     : [{ role: 'user', content: userMessage }];
@@ -170,6 +185,21 @@ export async function streamChat(userMessage, context, onChunk) {
   }
   if (context.pageUrl) systemParts.push(`\nCurrent page URL: ${context.pageUrl}`);
   if (context.customerName) systemParts.push(`\nCustomer: ${context.customerName}`);
+
+  if (context.org) {
+    const o = context.org;
+    systemParts.push(`\n## Connected AEM Environment
+- **Organization**: ${o.name} (${o.orgId})
+- **Repository**: ${o.repo} (branch: ${o.branch})
+- **Tier**: ${o.tier}
+- **Environment**: ${o.env}
+- **Services**: ${o.services?.join(', ') || 'EDS'}
+- **Preview**: ${o.previewOrigin}
+- **Live**: ${o.liveOrigin}
+- **DA Path**: admin.da.live/source/${o.daOrg}/${o.daRepo}
+
+You are working with the ${o.name} AEM environment. Reference this org context when discussing pages, blocks, publishing, and content operations.`);
+  }
 
   const messages = Array.isArray(userMessage)
     ? userMessage

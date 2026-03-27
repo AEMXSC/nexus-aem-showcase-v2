@@ -9,7 +9,22 @@ import * as ai from './ai.js';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
 
-const PREVIEW_URL = 'https://main--xscteamsite--aemxsc.aem.page/';
+/* ── AEM Org Configuration ── */
+const AEM_ORG = {
+  name: 'AEM XSC Showcase',
+  orgId: 'AEMXSC',
+  repo: 'nexus-aem-showcase-v2',
+  branch: 'main',
+  get previewOrigin() { return `https://${this.branch}--${this.repo}--${this.orgId.toLowerCase()}.aem.page`; },
+  get liveOrigin() { return `https://${this.branch}--${this.repo}--${this.orgId.toLowerCase()}.aem.live`; },
+  get daOrg() { return this.orgId; },
+  get daRepo() { return this.repo; },
+  tier: 'AEM CS + EDS',
+  env: 'Prod (VA7)',
+  services: ['EDS', 'Assets Content Hub', 'Sites', 'Forms'],
+};
+
+const PREVIEW_URL = AEM_ORG.previewOrigin + '/';
 
 /* ── DOM refs ── */
 const chatMessages = document.getElementById('chatMessages');
@@ -180,7 +195,7 @@ async function fetchPageHTML(url) {
 }
 
 function getPageContext() {
-  const ctx = { customerName: 'Princess Cruises', pageUrl: PREVIEW_URL };
+  const ctx = { customerName: AEM_ORG.name, pageUrl: PREVIEW_URL, org: AEM_ORG };
   // Try iframe DOM first (same-origin)
   try {
     const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow?.document;
@@ -722,6 +737,22 @@ document.querySelectorAll('.rail-btn[data-panel]').forEach((btn) => {
 
 /* ── Init ── */
 async function init() {
+  // Configure DA client from org config
+  da.configure({ org: AEM_ORG.orgId, repo: AEM_ORG.repo, branch: AEM_ORG.branch });
+
+  // Set org context in UI
+  const customerNameEl = document.querySelector('.customer-name');
+  const customerMetaEl = document.querySelector('.customer-meta');
+  if (customerNameEl) customerNameEl.textContent = AEM_ORG.name;
+  if (customerMetaEl) customerMetaEl.innerHTML = `${AEM_ORG.tier} &bull; ${AEM_ORG.env}`;
+
+  // Set breadcrumb from org
+  const breadcrumbItems = document.querySelectorAll('.breadcrumb-item');
+  const breadcrumbFile = document.querySelector('.breadcrumb-file');
+  if (breadcrumbItems[0]) breadcrumbItems[0].textContent = AEM_ORG.orgId.toLowerCase();
+  if (breadcrumbItems[1]) breadcrumbItems[1].textContent = AEM_ORG.repo;
+  if (breadcrumbFile) breadcrumbFile.textContent = 'index';
+
   loadPreview();
 
   // Initialize IMS
@@ -737,7 +768,7 @@ async function init() {
   setTimeout(() => ensurePageContext(), 3000);
 
   if (ai.hasApiKey()) {
-    console.log('Claude API key found — live AI mode');
+    console.log(`Claude API key found — live AI mode for ${AEM_ORG.name}`);
   }
 }
 

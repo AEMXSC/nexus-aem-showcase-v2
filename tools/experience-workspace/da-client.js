@@ -1,13 +1,25 @@
 /*
  * DA (Document Authoring) API Client
  * Uses IMS token for authenticated requests to admin.da.live
+ * Configurable via configure() — call from app.js with AEM_ORG values
  */
 
 import { fetchWithToken, getToken } from './ims.js';
 
 const DA_ADMIN = 'https://admin.da.live';
-const DA_ORG = 'AEMXSC';
-const DA_REPO = 'XSCTeamSite';
+let DA_ORG = 'AEMXSC';
+let DA_REPO = 'nexus-aem-showcase-v2';
+let DA_BRANCH = 'main';
+
+export function configure({ org, repo, branch } = {}) {
+  if (org) DA_ORG = org;
+  if (repo) DA_REPO = repo;
+  if (branch) DA_BRANCH = branch;
+}
+
+export function getOrg() { return DA_ORG; }
+export function getRepo() { return DA_REPO; }
+export function getBranch() { return DA_BRANCH; }
 
 export function getBasePath() {
   return `${DA_ADMIN}/source/${DA_ORG}/${DA_REPO}`;
@@ -55,23 +67,23 @@ export async function deletePage(path) {
 }
 
 export async function previewPage(path) {
-  const url = `https://admin.hlx.page/preview/${DA_ORG}/${DA_REPO}/main${path}`;
+  const url = `https://admin.hlx.page/preview/${DA_ORG}/${DA_REPO}/${DA_BRANCH}${path}`;
   const resp = await fetchWithToken(url, { method: 'POST' });
   return resp;
 }
 
 export async function publishPage(path) {
-  const url = `https://admin.hlx.page/live/${DA_ORG}/${DA_REPO}/main${path}`;
+  const url = `https://admin.hlx.page/live/${DA_ORG}/${DA_REPO}/${DA_BRANCH}${path}`;
   const resp = await fetchWithToken(url, { method: 'POST' });
   return resp;
 }
 
 export function getPreviewUrl(path) {
-  return `https://main--${DA_REPO.toLowerCase()}--${DA_ORG.toLowerCase()}.aem.page${path}`;
+  return `https://${DA_BRANCH}--${DA_REPO.toLowerCase()}--${DA_ORG.toLowerCase()}.aem.page${path}`;
 }
 
 export function getLiveUrl(path) {
-  return `https://main--${DA_REPO.toLowerCase()}--${DA_ORG.toLowerCase()}.aem.live${path}`;
+  return `https://${DA_BRANCH}--${DA_REPO.toLowerCase()}--${DA_ORG.toLowerCase()}.aem.live${path}`;
 }
 
 export function isAuthenticated() {
