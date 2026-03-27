@@ -1,7 +1,10 @@
 /*
  * AI Client — Claude API (direct browser access)
  * API key stored in localStorage, entered by user in settings
+ * Customer-specific system prompts via customer-profiles.js (Differentiator #1)
  */
+
+import { buildCustomerContext } from './customer-profiles.js';
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-20250514';
@@ -193,7 +196,7 @@ export async function chat(userMessage, context = {}) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Claude API key not configured');
 
-  const systemParts = [AEM_SYSTEM_PROMPT];
+  const systemParts = [AEM_SYSTEM_PROMPT, buildCustomerContext()];
 
   if (context.pageHTML) {
     systemParts.push(`\n\nCurrent page HTML (from iframe preview):\n\`\`\`html\n${context.pageHTML.slice(0, 15000)}\n\`\`\``);
@@ -314,7 +317,7 @@ export async function streamChat(userMessage, context, onChunk) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Claude API key not configured');
 
-  const systemParts = [AEM_SYSTEM_PROMPT];
+  const systemParts = [AEM_SYSTEM_PROMPT, buildCustomerContext()];
   if (context.pageHTML) {
     systemParts.push(`\n\nCurrent page HTML:\n\`\`\`html\n${context.pageHTML.slice(0, 15000)}\n\`\`\``);
   }

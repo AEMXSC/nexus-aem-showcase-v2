@@ -914,6 +914,104 @@ html, body {
   background: var(--text-disabled);
 }
 
+/* ─── Orchestration Steps ─── */
+.orchestration-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-left: 2px solid var(--border);
+  margin: 2px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  animation: fadeIn 0.25s ease;
+}
+
+.step-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+
+.step-indicator.active {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(74, 92, 219, 0.5);
+  animation: pulse 1.5s infinite;
+}
+
+.step-indicator.done {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.4);
+}
+
+.step-indicator.error {
+  background: var(--red);
+}
+
+.step-agent {
+  font-weight: 700;
+  color: var(--accent-light);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 130px;
+}
+
+.step-label {
+  color: var(--text-muted);
+}
+
+/* ─── Org Selector ─── */
+.org-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.org-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-sans);
+  text-align: left;
+}
+
+.org-option:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent);
+}
+
+.org-option.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.org-option .org-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.org-option .org-vertical {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.org-option.active .org-name {
+  color: var(--accent-light);
+}
+
 /* ─── Responsive ─── */
 @media (max-width: 768px) {
   .workspace {

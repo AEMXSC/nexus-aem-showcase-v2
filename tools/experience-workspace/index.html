@@ -54,7 +54,12 @@
       <!-- Settings Panel -->
       <div id="settingsPanel" class="settings-panel">
         <div class="settings-title">Settings</div>
-        <label class="settings-label">Claude API Key</label>
+
+        <label class="settings-label">Customer Profile</label>
+        <div id="orgSelector" class="org-selector"></div>
+        <div class="settings-hint">Switch customer profiles — brand voice, segments, approval chains, and legal rules update automatically</div>
+
+        <label class="settings-label" style="margin-top:16px">Claude API Key</label>
         <input type="password" id="claudeKeyInput" class="settings-input" placeholder="sk-ant-...">
         <div class="settings-hint">Enables real AI chat, governance analysis, and brief processing</div>
         <div class="settings-actions">
@@ -76,16 +81,16 @@
 
         <div class="suggested-prompts" id="suggestedPrompts">
           <button class="prompt-chip" data-flow="brief">
-            <span class="prompt-chip-icon">&#128196;</span>Upload Campaign Brief
+            <span class="prompt-chip-icon">&#128196;</span>Upload Brief
+          </button>
+          <button class="prompt-chip" data-flow="orchestrate">
+            <span class="prompt-chip-icon">&#9889;</span>Full Orchestration
           </button>
           <button class="prompt-chip" data-flow="governance">
             <span class="prompt-chip-icon">&#128737;</span>Governance Check
           </button>
           <button class="prompt-chip" data-flow="workfront">
-            <span class="prompt-chip-icon">&#128203;</span>Workfront Status
-          </button>
-          <button class="prompt-chip" data-flow="performance">
-            <span class="prompt-chip-icon">&#128200;</span>Performance
+            <span class="prompt-chip-icon">&#128203;</span>Workfront
           </button>
           <button class="prompt-chip" data-flow="personalize">
             <span class="prompt-chip-icon">&#128101;</span>Personalize
@@ -94,7 +99,7 @@
             <span class="prompt-chip-icon">&#128268;</span>MCP Services
           </button>
           <button class="prompt-chip" data-flow="blocks">
-            <span class="prompt-chip-icon">&#9638;</span>Block Library
+            <span class="prompt-chip-icon">&#9638;</span>Blocks
           </button>
         </div>
 
@@ -129,6 +134,10 @@
 
   <!-- Hidden preview frame for page context -->
   <iframe id="previewFrame" src="about:blank" title="Page Preview" style="display:none;"></iframe>
+
+  <!-- PDF.js for real PDF text extraction (Differentiator #3) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
   <script src="app.js" type="module"></script>
 </body>
