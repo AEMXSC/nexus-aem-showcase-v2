@@ -268,11 +268,42 @@ async function handleRealChat(text) {
     scrollChat();
   }
 
-  function onToolResult(toolName) {
+  function onToolResult(toolName, resultStr) {
     const stepEl = document.querySelector(`#tool-call-${toolCount}`);
     if (stepEl) {
       stepEl.classList.replace('active', 'done');
       stepEl.querySelector('.tool-call-status').textContent = 'Result';
+    }
+
+    // Render a page-created summary card (like Claude.ai AEM Content MCP)
+    // Only show for copy_aem_page (page creation) — not for every patch
+    if (toolName === 'copy_aem_page') {
+      try {
+        const result = JSON.parse(resultStr);
+        if (result.status === 'created') {
+          const title = result.title || result.path?.replace(/^\//, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'New Page';
+          const siteName = getActiveProfile()?.name || 'AEM Site';
+          const ueUrl = result.edit_urls?.universal_editor;
+          const daUrl = result.edit_urls?.document_authoring;
+          const action = result.status === 'created' ? 'Created' : 'Updated';
+          const profileName = getActiveProfile()?.contactName || 'Author';
+
+          addRawHTML(`
+            <div class="page-card">
+              <div class="page-card-header">
+                <div class="page-card-icon">📄</div>
+                <div class="page-card-meta">
+                  <div class="page-card-title">${title} — Live on ${siteName}</div>
+                  <div class="page-card-author">${action} by: ${profileName} — just now</div>
+                </div>
+              </div>
+              ${ueUrl ? `<a href="${ueUrl}" target="_blank" rel="noopener" class="page-card-link">Open in Universal Editor →</a>` : ''}
+              ${daUrl ? `<a href="${daUrl}" target="_blank" rel="noopener" class="page-card-link page-card-link-secondary">Open in Document Authoring →</a>` : ''}
+            </div>
+          `);
+          scrollChat();
+        }
+      } catch { /* not JSON, skip */ }
     }
 
     // Check if all calls in this agent group are done — update the header dot
