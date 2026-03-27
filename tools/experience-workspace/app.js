@@ -1445,21 +1445,41 @@ async function runServicesPanel() {
 
   addRawHTML(`<div class="agent-badge">MCP Services</div><div class="message-content">${html}</div>`);
 
-  // Show entitlements
+  // Show real MCP connectors
   addTyping();
   await sleep(600);
   removeTyping();
 
+  const connectors = profile.connectors || [];
+  if (connectors.length > 0) {
+    let conHTML = '<strong>Registered MCP Connectors</strong>';
+    conHTML += '<table class="gov-results" style="margin-top:10px"><tr><th>Connector</th><th>Environment</th><th>Type</th></tr>';
+    connectors.forEach((c) => {
+      conHTML += `<tr><td>${c.name}</td><td>${c.env}</td><td><span style="font-size:10px;padding:2px 6px;border-radius:3px;background:${c.type === 'NATIVE' ? 'color-mix(in srgb, var(--green) 15%, transparent)' : 'var(--accent-dim)'};color:${c.type === 'NATIVE' ? 'var(--green)' : 'var(--accent-light)'};font-weight:600">${c.type}</span></td></tr>`;
+    });
+    conHTML += '</table>';
+    conHTML += `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">${connectors.length} connectors registered · ${connectors.filter((c) => c.status === 'live').length} active</div>`;
+    addRawHTML(`<div class="agent-badge">Connectors</div><div class="message-content">${conHTML}</div>`);
+
+    addTyping();
+    await sleep(400);
+    removeTyping();
+  }
+
+  // Show entitlements
   const ents = profile.entitlements || AEM_ORG.entitlements;
-  let entHTML = '<strong>Confirmed Entitlements</strong>';
+  let entHTML = '<strong>Mapped Entitlements</strong>';
   entHTML += '<div class="issue-list" style="margin-top:8px">';
-  Object.values(ents).forEach((e) => {
-    const icon = e.status === 'live' ? '✓' : '⚡';
-    const cls = e.status === 'live' ? 'fixable' : '';
-    entHTML += `<div class="issue-item ${cls}">${icon} <strong>${e.name}</strong> — ${e.mcp} · ${e.note}</div>`;
+  const liveEnts = Object.values(ents).filter((e) => e.status === 'live');
+  const pendingEnts = Object.values(ents).filter((e) => e.status !== 'live');
+  liveEnts.forEach((e) => {
+    entHTML += `<div class="issue-item fixable">✓ <strong>${e.name}</strong> — ${e.mcp} · ${e.note}</div>`;
+  });
+  pendingEnts.forEach((e) => {
+    entHTML += `<div class="issue-item">⚡ <strong>${e.name}</strong> — ${e.mcp} · ${e.note}</div>`;
   });
   entHTML += '</div>';
-  entHTML += '<div class="money-line">Full Adobe Experience Cloud stack authenticated. AEM Content + AJO live today. Analytics, CJA, AEP, and Target ready once configured.</div>';
+  entHTML += `<div class="money-line">${liveEnts.length} of ${Object.values(ents).length} services live — ${connectors.length} MCP connectors registered across Prod, Stage, and Dev environments.</div>`;
 
   addRawHTML(`<div class="agent-badge">Entitlements</div><div class="message-content">${entHTML}</div>`);
 }
@@ -1660,9 +1680,15 @@ function navigateToPage(path) {
 /* ── Connect site: load preview + resources ── */
 function connectSite() {
   const origin = AEM_ORG.previewOrigin;
+  const profile = getActiveProfile();
   // Update home badge
   if (homeSiteName) homeSiteName.textContent = AEM_ORG.name;
-  if (homeSiteUrl) homeSiteUrl.textContent = origin.replace(/^https?:\/\//, '');
+  const connectorCount = profile.connectors?.length || 0;
+  if (homeSiteUrl) {
+    homeSiteUrl.textContent = connectorCount > 0
+      ? `${origin.replace(/^https?:\/\//, '')} · ${connectorCount} MCP connectors`
+      : origin.replace(/^https?:\/\//, '');
+  }
 
   // Load preview iframe with homepage
   navigateToPage('/');
