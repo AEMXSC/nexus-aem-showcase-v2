@@ -34,9 +34,16 @@ function scrollChat() { chatMessages.scrollTop = chatMessages.scrollHeight; }
 
 function md(text) {
   return text
+    .replace(/### (.*?)(\n|$)/g, '<h3>$1</h3>')
+    .replace(/## (.*?)(\n|$)/g, '<h2>$1</h2>')
+    .replace(/# (.*?)(\n|$)/g, '<h1>$1</h1>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/^[-*] (.+)/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+    .replace(/<\/ul>\s*<ul>/g, '')
+    .replace(/\n{2,}/g, '<br><br>')
     .replace(/\n/g, '<br>');
 }
 
@@ -149,21 +156,58 @@ function saveSettings() {
 }
 
 /* ── Get Page Context ── */
+let cachedPageHTML = null;
+let cachedPageUrl = null;
+
+async function fetchPageHTML(url) {
+  // AEM EDS .plain.html endpoint returns clean HTML without page shell
+  const plainUrl = url.replace(/\/?$/, '.plain.html');
+  try {
+    const resp = await fetch(plainUrl);
+    if (resp.ok) return resp.text();
+  } catch { /* CORS or network error */ }
+  // Fallback: try the URL directly
+  try {
+    const resp = await fetch(url);
+    if (resp.ok) {
+      const text = await resp.text();
+      // Extract body content from full HTML
+      const match = text.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+      return match ? match[1] : text;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function getPageContext() {
   const ctx = { customerName: 'Princess Cruises', pageUrl: PREVIEW_URL };
+  // Try iframe DOM first (same-origin)
   try {
     const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow?.document;
     if (iframeDoc?.body) {
       ctx.pageHTML = iframeDoc.documentElement.outerHTML;
+      return ctx;
     }
   } catch { /* cross-origin */ }
+  // Use cached fetched HTML
+  if (cachedPageHTML) {
+    ctx.pageHTML = cachedPageHTML;
+  }
   return ctx;
+}
+
+async function ensurePageContext() {
+  const currentUrl = previewFrame.src || PREVIEW_URL;
+  if (cachedPageHTML && cachedPageUrl === currentUrl) return;
+  cachedPageUrl = currentUrl;
+  cachedPageHTML = await fetchPageHTML(currentUrl);
 }
 
 /* ── REAL: AI Chat ── */
 async function handleRealChat(text) {
   conversationHistory.push({ role: 'user', content: text });
 
+  await ensurePageContext();
   const ctx = getPageContext();
   const streamEl = addStreamMessage('Experience Agent');
 
@@ -185,66 +229,86 @@ async function runRealGovernance() {
   addMessage('user', 'Run governance scan on the current page');
 
   // Step 1: Client-side DOM scan
-  addTyping();
-  await sleep(500);
-  removeTyping();
+  const scanMsg = addRawHTML(`
+    <div class="agent-badge">Governance Scanner</div>
+    <div class="message-content">
+      <strong>Scanning page...</strong>
+      <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+    </div>
+  `);
+  const fill = scanMsg.querySelector('.progress-fill');
 
   let scanResult = null;
+  let scanDoc = null;
+
+  // Try iframe DOM first (same-origin), then fetch .plain.html
   try {
-    const iframeDoc = previewFrame.contentDocument || previewFrame.contentWindow?.document;
-    if (iframeDoc) {
-      const scanMsg = addRawHTML(`
-        <div class="agent-badge">Governance Scanner</div>
-        <div class="message-content">
-          <strong>Scanning page DOM...</strong>
-          <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
-        </div>
-      `);
+    scanDoc = previewFrame.contentDocument || previewFrame.contentWindow?.document;
+    if (!scanDoc?.body?.innerHTML) scanDoc = null;
+  } catch { scanDoc = null; }
 
-      const fill = scanMsg.querySelector('.progress-fill');
-      for (let i = 1; i <= 5; i++) {
-        await sleep(300);
-        fill.style.width = `${i * 20}%`;
-      }
+  if (!scanDoc) {
+    // Fetch page HTML and parse into a document
+    fill.style.width = '20%';
+    await ensurePageContext();
+    fill.style.width = '40%';
 
-      scanResult = gov.scanPage(iframeDoc);
-      const formatted = gov.formatResults(scanResult);
-
-      addRawHTML(`
-        <div class="agent-badge">Governance Scanner</div>
-        <div class="message-content">${formatted.html}</div>
-      `);
-
-      // Update governance bar
-      const checks = {};
-      Object.entries(scanResult.results).forEach(([key, cat]) => {
-        if (['brand', 'legal', 'a11y', 'seo'].includes(key)) {
-          if (cat.fail > 0) checks[key] = 'fail';
-          else if (cat.warn > 0) checks[key] = 'warn';
-          else checks[key] = true;
-        }
-      });
-      updateGovernanceBar(scanResult.score, checks);
-    } else {
-      addMessage('assistant', '⚠ Cannot access iframe content (cross-origin). Loading page for analysis...', 'Governance Scanner');
+    if (cachedPageHTML) {
+      const parser = new DOMParser();
+      scanDoc = parser.parseFromString(
+        `<!DOCTYPE html><html><head></head><body>${cachedPageHTML}</body></html>`,
+        'text/html',
+      );
     }
-  } catch (err) {
-    addMessage('assistant', `⚠ DOM scan error: ${err.message}`, 'Governance Scanner');
+  }
+
+  if (scanDoc) {
+    for (let i = 3; i <= 5; i++) {
+      await sleep(250);
+      fill.style.width = `${i * 20}%`;
+    }
+
+    scanResult = gov.scanPage(scanDoc);
+    const formatted = gov.formatResults(scanResult);
+
+    addRawHTML(`
+      <div class="agent-badge">Governance Scanner</div>
+      <div class="message-content">${formatted.html}</div>
+    `);
+
+    // Update governance bar
+    const checks = {};
+    Object.entries(scanResult.results).forEach(([key, cat]) => {
+      if (['brand', 'legal', 'a11y', 'seo'].includes(key)) {
+        if (cat.fail > 0) checks[key] = 'fail';
+        else if (cat.warn > 0) checks[key] = 'warn';
+        else checks[key] = true;
+      }
+    });
+    updateGovernanceBar(scanResult.score, checks);
+  } else {
+    fill.style.width = '100%';
+    addMessage('assistant', '⚠ Could not fetch page content for scanning. Check the preview URL.', 'Governance Scanner');
   }
 
   // Step 2: AI-powered deep analysis (if Claude key available)
   if (ai.hasApiKey()) {
     addTyping();
-    await sleep(800);
+    await sleep(400);
     removeTyping();
 
     try {
+      await ensurePageContext();
       const ctx = getPageContext();
       if (ctx.pageHTML) {
-        const analysis = await ai.analyzeGovernance(ctx.pageHTML, ctx.pageUrl);
-        addMessage('assistant', md(analysis), 'AI Governance Agent');
+        const streamEl = addStreamMessage('AI Governance Agent');
+        await ai.streamChat(
+          [{ role: 'user', content: `Analyze this AEM page for governance compliance. Check brand, legal, accessibility (WCAG 2.1 AA), and SEO. Be specific — reference actual elements. Return a structured report with scores and actionable fixes.\n\nPage URL: ${ctx.pageUrl}\n\nPage HTML:\n\`\`\`html\n${ctx.pageHTML.slice(0, 15000)}\n\`\`\`` }],
+          ctx,
+          (chunk, full) => { streamEl.innerHTML = md(full); scrollChat(); },
+        );
       } else {
-        addMessage('assistant', 'AI analysis requires page HTML access. Try loading the page in a same-origin iframe.', 'AI Governance Agent');
+        addMessage('assistant', 'No page content available for AI analysis.', 'AI Governance Agent');
       }
     } catch (err) {
       addMessage('assistant', `AI analysis error: ${err.message}`, 'AI Governance Agent');
@@ -635,6 +699,27 @@ if (settingsBtn) {
   settingsBtn.addEventListener('click', toggleSettings);
 }
 
+// Icon rail settings button
+const railSettingsBtn = document.getElementById('railSettingsBtn');
+if (railSettingsBtn) {
+  railSettingsBtn.addEventListener('click', toggleSettings);
+}
+
+// Icon rail panel switching
+document.querySelectorAll('.rail-btn[data-panel]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.rail-btn[data-panel]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const panel = btn.dataset.panel;
+    if (panel === 'governance') {
+      runGovernance();
+    } else if (panel === 'analytics') {
+      runPerformanceFlow();
+    }
+  });
+});
+
 /* ── Init ── */
 async function init() {
   loadPreview();
@@ -648,9 +733,11 @@ async function init() {
 
   updateAuthUI();
 
-  // Check for existing Claude key
+  // Pre-fetch page context after iframe starts loading
+  setTimeout(() => ensurePageContext(), 3000);
+
   if (ai.hasApiKey()) {
-    console.log('Claude API key found in localStorage');
+    console.log('Claude API key found — live AI mode');
   }
 }
 
