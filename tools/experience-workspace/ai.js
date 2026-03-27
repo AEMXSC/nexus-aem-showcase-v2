@@ -5,6 +5,7 @@
  */
 
 import { buildCustomerContext } from './customer-profiles.js';
+import { buildKnownSitesPrompt } from './known-sites.js';
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-20250514';
@@ -196,7 +197,7 @@ export async function chat(userMessage, context = {}) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Claude API key not configured');
 
-  const systemParts = [AEM_SYSTEM_PROMPT, buildCustomerContext()];
+  const systemParts = [AEM_SYSTEM_PROMPT, buildCustomerContext(), buildKnownSitesPrompt()];
 
   if (context.pageHTML) {
     systemParts.push(`\n\nCurrent page HTML (from iframe preview):\n\`\`\`html\n${context.pageHTML.slice(0, 15000)}\n\`\`\``);
@@ -208,6 +209,10 @@ export async function chat(userMessage, context = {}) {
 
   if (context.customerName) {
     systemParts.push(`\nCustomer: ${context.customerName}`);
+  }
+
+  if (context.siteContext) {
+    systemParts.push(context.siteContext);
   }
 
   if (context.org) {
@@ -317,12 +322,13 @@ export async function streamChat(userMessage, context, onChunk) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Claude API key not configured');
 
-  const systemParts = [AEM_SYSTEM_PROMPT, buildCustomerContext()];
+  const systemParts = [AEM_SYSTEM_PROMPT, buildCustomerContext(), buildKnownSitesPrompt()];
   if (context.pageHTML) {
     systemParts.push(`\n\nCurrent page HTML:\n\`\`\`html\n${context.pageHTML.slice(0, 15000)}\n\`\`\``);
   }
   if (context.pageUrl) systemParts.push(`\nCurrent page URL: ${context.pageUrl}`);
   if (context.customerName) systemParts.push(`\nCustomer: ${context.customerName}`);
+  if (context.siteContext) systemParts.push(context.siteContext);
 
   if (context.org) {
     const o = context.org;

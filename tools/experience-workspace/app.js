@@ -14,6 +14,7 @@ import * as ai from './ai.js';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
+import { detectSiteMention, fetchSiteContent, buildSiteContext } from './known-sites.js';
 
 /* ── Dynamic Org Configuration (from customer profile) ── */
 let AEM_ORG = getOrgConfig();
@@ -214,6 +215,56 @@ async function handleRealChat(text) {
 
   await ensurePageContext();
   const ctx = getPageContext();
+
+  // Detect site mentions and fetch real content via simulated MCP
+  const siteMention = detectSiteMention(text);
+  if (siteMention) {
+    const { site } = siteMention;
+    const mcpStatus = addRawHTML(`
+      <div class="agent-badge">AEM Content MCP</div>
+      <div class="message-content">
+        <strong>Discovering ${site.name}...</strong>
+        <div class="orchestration-steps">
+          <div class="orchestration-step active" id="mcp-discover">
+            <span class="step-indicator"><span class="gen-dot"></span></span>
+            <span class="step-agent">Get AEM Sites → ${site.name}</span>
+          </div>
+          <div class="orchestration-step" id="mcp-pages">
+            <span class="step-indicator"><span class="gen-dot"></span></span>
+            <span class="step-agent">Get AEM Pages → fetching content</span>
+          </div>
+        </div>
+      </div>
+    `);
+
+    // Fetch real content from the site
+    const fetchedPages = await fetchSiteContent(site);
+
+    // Update MCP status
+    const discoverStep = mcpStatus.querySelector('#mcp-discover');
+    const pagesStep = mcpStatus.querySelector('#mcp-pages');
+    if (discoverStep) discoverStep.classList.replace('active', 'done');
+    if (pagesStep) pagesStep.classList.add('active');
+    await sleep(300);
+    if (pagesStep) pagesStep.classList.replace('active', 'done');
+
+    // Update status message
+    const statusContent = mcpStatus.querySelector('.message-content strong');
+    if (statusContent) {
+      statusContent.innerHTML = `Found ${site.name} — ${fetchedPages.length} page(s) retrieved`;
+    }
+
+    // Inject site content into context
+    const siteContext = buildSiteContext(site, fetchedPages);
+    ctx.siteContext = siteContext;
+
+    // Also add page HTML from first fetched page if no existing page context
+    if (!ctx.pageHTML && fetchedPages.length > 0) {
+      ctx.pageHTML = fetchedPages[0].html;
+      ctx.pageUrl = `${site.previewOrigin}${fetchedPages[0].path}`;
+    }
+  }
+
   const streamEl = addStreamMessage('Experience Agent');
 
   try {
@@ -952,6 +1003,19 @@ const FLOWS = {
 /* ── User Input ── */
 function matchSpecializedFlow(text) {
   const lower = text.toLowerCase();
+
+  // If the message mentions a known site + governance/compliance, route through AI chat
+  // (which has site detection and content fetching) instead of the basic page scanner
+  const mentionsSite = !!detectSiteMention(text);
+  const mentionsGovernance = lower.includes('governance') || lower.includes('compliance')
+    || lower.includes('scan') || lower.includes('check') || lower.includes('review')
+    || lower.includes('audit') || lower.includes('look at');
+
+  if (mentionsSite && ai.hasApiKey()) {
+    // Let AI chat handle it — it will detect the site, fetch content via MCP, and analyze
+    return null;
+  }
+
   if (lower.includes('brief') || lower.includes('upload') || lower.includes('create page')) return runBrief;
   if (lower.includes('governance') || lower.includes('compliance') || lower.includes('scan all')
       || lower.includes('scan page') || lower.includes('run scan')) return runGovernance;
