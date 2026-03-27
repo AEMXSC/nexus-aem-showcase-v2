@@ -8,6 +8,7 @@ import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './im
 import * as ai from './ai.js';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
+import * as wf from './workfront.js';
 
 /* ── AEM Org Configuration ── */
 const AEM_ORG = {
@@ -346,6 +347,24 @@ async function runRealGovernance() {
         </div>
       `);
     }
+
+    // Workfront AI Reviewer — brand compliance check on page assets
+    addTyping();
+    await sleep(600);
+    removeTyping();
+
+    const heroImg = scanDoc?.querySelector('img');
+    const assetName = heroImg?.src?.split('/').pop() || heroImg?.alt || 'page-hero-asset';
+    const review = await wf.reviewAsset({ name: assetName, type: 'page-asset' });
+    let reviewHTML = `<strong>Brand Asset Review: ${review.asset}</strong>`;
+    reviewHTML += `<div style="margin:6px 0"><span style="font-weight:600;color:${review.brandScore >= 90 ? 'var(--green)' : 'var(--yellow)'}">${review.brandScore}%</span> brand-compliant</div>`;
+    reviewHTML += '<div class="issue-list">';
+    review.checks.forEach((c) => {
+      const icon = c.status === 'pass' ? '✓' : c.status === 'warn' ? '⚠' : '❌';
+      reviewHTML += `<div class="issue-item ${c.status === 'pass' ? 'fixable' : 'needs-review'}">${icon} ${c.rule}: ${c.detail}</div>`;
+    });
+    reviewHTML += '</div>';
+    addRawHTML(`<div class="agent-badge">WF AI Reviewer</div><div class="message-content">${reviewHTML}</div>`);
   }
 }
 
@@ -550,6 +569,81 @@ async function runDemoGovernance() {
   updateGovernanceBar(87, { brand: 'warn', legal: 'fail', a11y: 'fail', seo: 'fail' });
 }
 
+/* ── Workfront WOA Flows ── */
+async function runWorkfrontPanel() {
+  addMessage('user', 'Show Workfront project status and agent capabilities');
+
+  // Show connected agents
+  const agents = wf.getAgentStatus();
+  let agentHTML = '<strong>Workfront Optimization Agents</strong>';
+  agentHTML += '<table class="gov-results" style="margin-top:10px"><tr><th>Agent</th><th>Status</th><th>GA</th></tr>';
+  agents.forEach((a) => {
+    const statusLabel = a.status === 'open-beta' ? '<span style="color:var(--yellow)">Open Beta</span>'
+      : a.status === 'ga-planned' ? '<span style="color:var(--green)">GA Planned</span>'
+        : '<span style="color:var(--text-muted)">TBD</span>';
+    agentHTML += `<tr><td>${a.icon} ${a.name}</td><td>${statusLabel}</td><td>${a.ga}</td></tr>`;
+  });
+  agentHTML += '</table>';
+
+  addRawHTML(`<div class="agent-badge">Workfront WOA</div><div class="message-content">${agentHTML}</div>`);
+
+  // Project Health
+  addTyping();
+  await sleep(800);
+  removeTyping();
+
+  const health = await wf.getProjectHealth();
+  const healthColor = health.healthScore >= 85 ? 'var(--green)' : health.healthScore >= 70 ? 'var(--yellow)' : 'var(--accent)';
+
+  let healthHTML = `<strong>${health.projectName}</strong>`;
+  healthHTML += `<div style="margin:8px 0"><span style="font-size:24px;font-weight:700;color:${healthColor}">${health.healthScore}</span><span style="color:var(--text-muted);margin-left:4px">/ 100 health score</span></div>`;
+  healthHTML += `<div style="margin-bottom:8px">Status: <strong style="color:${health.status === 'at-risk' ? 'var(--yellow)' : 'var(--green)'}">${health.status.toUpperCase()}</strong> · Timeline: ${health.timeline.projected} (${health.timeline.variance})</div>`;
+  healthHTML += '<div class="issue-list">';
+  health.insights.forEach((i) => {
+    const icon = i.type === 'risk' ? '⚠' : i.type === 'positive' ? '✓' : '💡';
+    const cls = i.type === 'risk' ? 'needs-review' : i.type === 'positive' ? 'fixable' : '';
+    healthHTML += `<div class="issue-item ${cls}">${icon} ${i.message}</div>`;
+  });
+  healthHTML += '</div>';
+  healthHTML += `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Tasks: ${health.tasks.completed}/${health.tasks.total} complete · ${health.tasks.inProgress} in progress · ${health.tasks.blocked} blocked</div>`;
+
+  addRawHTML(`<div class="agent-badge">Project Health</div><div class="message-content">${healthHTML}</div>`);
+}
+
+async function runAIReviewer(assetInfo) {
+  const asset = assetInfo || { name: 'hero-campaign-banner.png', type: 'image', url: '' };
+  addMessage('user', `Review asset: ${asset.name}`);
+
+  addTyping();
+  await sleep(1200);
+  removeTyping();
+
+  const review = await wf.reviewAsset(asset);
+  let html = `<strong>Brand Compliance Review: ${review.asset}</strong>`;
+  html += `<div style="margin:8px 0"><span style="font-size:20px;font-weight:700;color:${review.brandScore >= 90 ? 'var(--green)' : 'var(--yellow)'}">${review.brandScore}%</span> brand-compliant</div>`;
+  html += '<div class="issue-list">';
+  review.checks.forEach((c) => {
+    const icon = c.status === 'pass' ? '✓' : c.status === 'warn' ? '⚠' : '❌';
+    const cls = c.status === 'pass' ? 'fixable' : c.status === 'warn' ? 'needs-review' : 'critical';
+    html += `<div class="issue-item ${cls}">${icon} <strong>${c.rule}</strong> — ${c.detail}</div>`;
+  });
+  html += '</div>';
+  html += `<div class="money-line">${review.recommendation}</div>`;
+
+  addRawHTML(`<div class="agent-badge">AI Reviewer</div><div class="message-content">${html}</div>`);
+}
+
+async function runWorkfrontQuery(question) {
+  const q = question || 'What tasks are overdue this week?';
+
+  addTyping();
+  await sleep(1000);
+  removeTyping();
+
+  const result = await wf.askWorkfront(q);
+  addRawHTML(`<div class="agent-badge">Intelligent Answers</div><div class="message-content">${md(result.answer)}<div style="margin-top:8px;font-size:10px;color:var(--text-muted)">Sources: ${result.sources.join(', ')} · Confidence: ${Math.round(result.confidence * 100)}%</div></div>`);
+}
+
 /* ── Governance fix actions (demo) ── */
 window.applyGovernanceFixes = async function applyGovernanceFixes() {
   addMessage('user', 'Apply the 3 auto-fixes');
@@ -581,7 +675,15 @@ window.applyGovernanceFixes = async function applyGovernanceFixes() {
 window.routeForReview = async function routeForReview() {
   addMessage('user', 'Route the Black Friday issue for legal review');
   addTyping(); await sleep(1000); removeTyping();
-  addMessage('assistant', md('✓ Workfront task **PCL-2851** created:\n\nAssignee: @legal-review\nPriority: High\nPage: `/offers/black-friday`\nAction required: Approve unpublish of expired Q4 offer\nSLA: 48h per Princess Cruises legal review policy'), 'Governance Agent');
+
+  const result = await wf.routeForReview({
+    pagePath: '/offers/black-friday',
+    issueType: 'Expired Offer',
+    severity: 'critical',
+    description: 'Expired Q4 Black Friday offer still live — requires legal approval to unpublish',
+  });
+
+  addMessage('assistant', md(`✓ Workfront task **${result.task.id}** created:\n\nAssignee: ${result.task.assignee}\nPriority: ${result.task.priority}\nPage: \`/offers/black-friday\`\nAction required: Approve unpublish of expired Q4 offer\nSLA: ${result.sla}`), 'Workfront WOA');
 };
 
 /* ── Flow 2/3: Performance & Personalize (demo only for now) ── */
@@ -639,6 +741,7 @@ const FLOWS = {
   governance: runGovernance,
   performance: runPerformanceFlow,
   personalize: runPersonalizeFlow,
+  workfront: runWorkfrontPanel,
 };
 
 /* ── User Input ── */
@@ -663,6 +766,16 @@ function handleUserInput() {
     setTimeout(() => runPerformanceFlow(), 400);
   } else if (lower.includes('personal') || lower.includes('segment') || lower.includes('variant')) {
     setTimeout(() => runPersonalizeFlow(), 400);
+  } else if (lower.includes('workfront') || lower.includes('project health') || lower.includes('project status')) {
+    setTimeout(() => runWorkfrontPanel(), 400);
+  } else if (lower.includes('review asset') || lower.includes('brand review') || lower.includes('brand check')) {
+    setTimeout(() => runAIReviewer(), 400);
+  } else if (lower.includes('overdue') || lower.includes('pending approval') || lower.includes('capacity') || lower.includes('workload')) {
+    setTimeout(() => {
+      addMessage('user', text);
+      runWorkfrontQuery(text);
+    }, 400);
+    return; // already added user message
   } else {
     setTimeout(async () => {
       addTyping(); await sleep(1000); removeTyping();
@@ -731,6 +844,8 @@ document.querySelectorAll('.rail-btn[data-panel]').forEach((btn) => {
       runGovernance();
     } else if (panel === 'analytics') {
       runPerformanceFlow();
+    } else if (panel === 'workfront') {
+      runWorkfrontPanel();
     }
   });
 });
