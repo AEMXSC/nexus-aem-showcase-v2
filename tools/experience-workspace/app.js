@@ -14,7 +14,7 @@ import * as ai from './ai.js';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
-import { detectSiteMention, fetchSiteContent, buildSiteContext } from './known-sites.js';
+import { detectSiteMention } from './known-sites.js';
 
 /* ── Dynamic Org Configuration (from customer profile) ── */
 let AEM_ORG = getOrgConfig();
@@ -209,74 +209,72 @@ async function ensurePageContext() {
   cachedPageHTML = await fetchPageHTML(currentUrl);
 }
 
-/* ── REAL: AI Chat ── */
+/* ── REAL: AI Chat (with native tool use) ── */
 async function handleRealChat(text) {
   conversationHistory.push({ role: 'user', content: text });
 
   await ensurePageContext();
   const ctx = getPageContext();
 
-  // Detect site mentions and fetch real content via simulated MCP
-  const siteMention = detectSiteMention(text);
-  if (siteMention) {
-    const { site } = siteMention;
-    const mcpStatus = addRawHTML(`
-      <div class="agent-badge">AEM Content MCP</div>
-      <div class="message-content">
-        <strong>Discovering ${site.name}...</strong>
-        <div class="orchestration-steps">
-          <div class="orchestration-step active" id="mcp-discover">
-            <span class="step-indicator"><span class="gen-dot"></span></span>
-            <span class="step-agent">Get AEM Sites → ${site.name}</span>
-          </div>
-          <div class="orchestration-step" id="mcp-pages">
-            <span class="step-indicator"><span class="gen-dot"></span></span>
-            <span class="step-agent">Get AEM Pages → fetching content</span>
-          </div>
-        </div>
+  // Tool call UI container — shows MCP tool calls as they happen (like Claude.ai)
+  let toolContainer = null;
+  let toolCount = 0;
+
+  function onToolCall(toolName, toolInput) {
+    toolCount++;
+    if (!toolContainer) {
+      toolContainer = addRawHTML(`
+        <div class="agent-badge">AEM Content MCP</div>
+        <div class="message-content mcp-tool-calls"></div>
+      `);
+    }
+    const callsEl = toolContainer.querySelector('.mcp-tool-calls');
+    const toolId = `tool-call-${toolCount}`;
+    const inputSummary = formatToolInput(toolName, toolInput);
+    callsEl.innerHTML += `
+      <div class="orchestration-step active" id="${toolId}">
+        <span class="step-indicator"><span class="gen-dot"></span></span>
+        <span class="step-agent">${toolName}(${inputSummary})</span>
       </div>
-    `);
+    `;
+    scrollChat();
+  }
 
-    // Fetch real content from the site
-    const fetchedPages = await fetchSiteContent(site);
-
-    // Update MCP status
-    const discoverStep = mcpStatus.querySelector('#mcp-discover');
-    const pagesStep = mcpStatus.querySelector('#mcp-pages');
-    if (discoverStep) discoverStep.classList.replace('active', 'done');
-    if (pagesStep) pagesStep.classList.add('active');
-    await sleep(300);
-    if (pagesStep) pagesStep.classList.replace('active', 'done');
-
-    // Update status message
-    const statusContent = mcpStatus.querySelector('.message-content strong');
-    if (statusContent) {
-      statusContent.innerHTML = `Found ${site.name} — ${fetchedPages.length} page(s) retrieved`;
-    }
-
-    // Inject site content into context
-    const siteContext = buildSiteContext(site, fetchedPages);
-    ctx.siteContext = siteContext;
-
-    // Also add page HTML from first fetched page if no existing page context
-    if (!ctx.pageHTML && fetchedPages.length > 0) {
-      ctx.pageHTML = fetchedPages[0].html;
-      ctx.pageUrl = `${site.previewOrigin}${fetchedPages[0].path}`;
-    }
+  function onToolResult(toolName) {
+    const stepEl = toolContainer?.querySelector(`#tool-call-${toolCount}`);
+    if (stepEl) stepEl.classList.replace('active', 'done');
   }
 
   const streamEl = addStreamMessage('Experience Agent');
 
   try {
-    const rawResponse = await ai.streamChat(conversationHistory, ctx, (chunk, full) => {
-      streamEl.innerHTML = md(full);
-      scrollChat();
-    });
+    const rawResponse = await ai.streamChat(
+      conversationHistory,
+      ctx,
+      (chunk, full) => {
+        streamEl.innerHTML = md(full);
+        scrollChat();
+      },
+      onToolCall,
+      onToolResult,
+    );
 
     conversationHistory.push({ role: 'assistant', content: rawResponse });
   } catch (err) {
     streamEl.innerHTML = `<span style="color:var(--accent)">AI Error: ${err.message}</span><br>Check your API key in settings.`;
   }
+}
+
+/* Format tool input for display */
+function formatToolInput(toolName, input) {
+  if (toolName === 'get_aem_sites') return '';
+  if (toolName === 'get_aem_site_pages') return `"${input.site_id || ''}"`;
+  if (toolName === 'get_page_content') {
+    if (input.url) return `"${input.url.split('/').pop() || input.url}"`;
+    if (input.path) return `"${input.site_id || ''}${input.path}"`;
+    return '';
+  }
+  return JSON.stringify(input).slice(0, 40);
 }
 
 /* ── REAL: Governance Scan ── */

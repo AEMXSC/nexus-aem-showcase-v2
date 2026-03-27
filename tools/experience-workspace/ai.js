@@ -1,11 +1,15 @@
 /*
- * AI Client — Claude API (direct browser access)
- * API key stored in localStorage, entered by user in settings
+ * AI Client — Claude API (direct browser access) with tool use
+ *
+ * The AI has access to AEM MCP tools defined as Claude API tools.
+ * When the AI calls a tool (e.g., get_aem_sites), we execute it client-side
+ * by hitting real AEM endpoints. This is the same pattern as Claude.ai + MCP.
+ *
  * Customer-specific system prompts via customer-profiles.js (Differentiator #1)
  */
 
 import { buildCustomerContext } from './customer-profiles.js';
-import { buildKnownSitesPrompt } from './known-sites.js';
+import { KNOWN_SITES, resolveSite, listKnownSites, buildKnownSitesPrompt } from './known-sites.js';
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-20250514';
@@ -30,10 +34,145 @@ export function hasApiKey() {
   return !!getApiKey();
 }
 
+/* ── AEM MCP Tool Definitions ── */
+/* These match the real AEM Content MCP tools that Claude.ai uses */
+
+const AEM_TOOLS = [
+  {
+    name: 'get_aem_sites',
+    description: 'List all AEM Edge Delivery sites available via the AEM Content MCP. Returns site names, GitHub orgs, repos, preview/live URLs, and verticals.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_aem_site_pages',
+    description: 'Get the list of pages for a specific AEM Edge Delivery site. Returns page paths, titles, and descriptions. Use the site_id from get_aem_sites, or provide org+repo directly.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        site_id: { type: 'string', description: 'Site identifier (e.g., "frescopa", "securbank", "wknd")' },
+        org: { type: 'string', description: 'GitHub org (e.g., "aem-showcase"). Used if site_id is not a known site.' },
+        repo: { type: 'string', description: 'Repository name (e.g., "frescopa"). Used with org for unknown sites.' },
+      },
+      required: ['site_id'],
+    },
+  },
+  {
+    name: 'get_page_content',
+    description: 'Fetch the HTML content of a specific AEM Edge Delivery page using the .plain.html endpoint. Provide either a full URL or a site_id + path. Returns the raw HTML content of the page for analysis.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Full preview URL to fetch (e.g., "https://main--frescopa--aem-showcase.aem.page/coffee")' },
+        site_id: { type: 'string', description: 'Known site ID to build the URL from (e.g., "frescopa")' },
+        path: { type: 'string', description: 'Page path within the site (e.g., "/coffee", "/index")' },
+      },
+      required: [],
+    },
+  },
+];
+
+/* ── Client-Side Tool Executor ── */
+/* Handles tool calls by hitting real AEM endpoints */
+
+async function executeTool(name, input) {
+  switch (name) {
+    case 'get_aem_sites': {
+      const sites = listKnownSites();
+      return JSON.stringify({ sites, count: sites.length }, null, 2);
+    }
+
+    case 'get_aem_site_pages': {
+      const site = resolveSite(input.site_id);
+      if (!site) {
+        // Try to construct from org+repo
+        if (input.org && input.repo) {
+          const origin = `https://main--${input.repo}--${input.org}.aem.page`;
+          // Try fetching sitemap for unknown sites
+          try {
+            const resp = await fetch(`${origin}/sitemap.xml`);
+            if (resp.ok) {
+              const xml = await resp.text();
+              const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+              return JSON.stringify({
+                name: `${input.org}/${input.repo}`,
+                preview: origin,
+                pages: urls.slice(0, 20).map((u) => ({ url: u, path: new URL(u).pathname })),
+              }, null, 2);
+            }
+          } catch { /* fallback */ }
+          return JSON.stringify({ name: `${input.org}/${input.repo}`, preview: origin, pages: [{ path: '/index', title: 'Homepage' }] });
+        }
+        return JSON.stringify({ error: `Site not found: ${input.site_id}. Use get_aem_sites to list available sites.` });
+      }
+      return JSON.stringify({
+        name: site.name,
+        siteId: site.siteId,
+        org: site.org,
+        repo: site.repo,
+        branch: site.branch,
+        preview: site.previewOrigin,
+        live: site.liveOrigin,
+        vertical: site.vertical,
+        blocks: site.blocks,
+        pages: site.pages,
+      }, null, 2);
+    }
+
+    case 'get_page_content': {
+      let pageUrl = input.url;
+
+      // Resolve URL from site_id + path
+      if (!pageUrl && input.site_id && input.path) {
+        const site = resolveSite(input.site_id);
+        if (site) {
+          pageUrl = `${site.previewOrigin}${input.path}`;
+        } else if (input.org && input.repo) {
+          pageUrl = `https://main--${input.repo}--${input.org}.aem.page${input.path}`;
+        }
+      }
+
+      if (!pageUrl) {
+        return JSON.stringify({ error: 'Provide either url, or site_id + path to fetch page content.' });
+      }
+
+      // Fetch .plain.html endpoint
+      const plainUrl = pageUrl.endsWith('.plain.html') ? pageUrl : pageUrl.replace(/\/?$/, '.plain.html');
+      try {
+        const resp = await fetch(plainUrl);
+        if (resp.ok) {
+          const html = await resp.text();
+          return html.length > 15000 ? html.slice(0, 15000) + '\n\n[... truncated at 15000 chars]' : html;
+        }
+        return JSON.stringify({ error: `HTTP ${resp.status} fetching ${plainUrl}` });
+      } catch (e) {
+        return JSON.stringify({ error: `Fetch failed: ${e.message}. The page may not exist or CORS may be blocking.` });
+      }
+    }
+
+    default:
+      return JSON.stringify({ error: `Unknown tool: ${name}` });
+  }
+}
+
+/* ── System Prompt ── */
+
 const AEM_SYSTEM_PROMPT = `You are the **Experience Workspace AI** — an expert agent embedded in Adobe Experience Manager's content operations interface.
 
 ## Your Role
 You are the AI brain behind AEM's agentic content supply chain. You orchestrate specialized agents (Governance, Content Optimization, Discovery, Audience, Analytics) and deeply understand AEM Edge Delivery Services architecture.
+
+## Your MCP Tools
+You have real AEM Content MCP tools available. USE THEM when users ask about sites, pages, or content:
+
+1. **get_aem_sites** — Discover all AEM sites. Call this first when users mention a site name.
+2. **get_aem_site_pages** — Get the page list for a site. Call after discovering the site.
+3. **get_page_content** — Fetch actual HTML content from a page. Call this to analyze real content.
+
+**IMPORTANT**: When users mention a site (like "Frescopa", "SecurBank", "WKND"), ALWAYS use your tools to fetch real content. Do NOT guess or make up content. Call get_aem_sites → get_aem_site_pages → get_page_content in sequence.
 
 ## Capabilities
 - **Page Analysis**: Analyze EDS pages — structure, blocks, sections, metadata, performance
@@ -193,31 +332,20 @@ Library: \`https://main--sta-xwalk-boilerplate--aemysites.aem.page/tools/sidekic
 ## Tone
 Senior AEM architect who understands marketing KPIs. Technical precision meets business value. Every sentence earns its place.`;
 
-export async function chat(userMessage, context = {}) {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error('Claude API key not configured');
-
-  const systemParts = [AEM_SYSTEM_PROMPT, buildCustomerContext(), buildKnownSitesPrompt()];
+/* ── Build System Prompt Parts ── */
+function buildSystemParts(context = {}) {
+  const parts = [AEM_SYSTEM_PROMPT, buildCustomerContext(), buildKnownSitesPrompt()];
 
   if (context.pageHTML) {
-    systemParts.push(`\n\nCurrent page HTML (from iframe preview):\n\`\`\`html\n${context.pageHTML.slice(0, 15000)}\n\`\`\``);
+    parts.push(`\n\nCurrent page HTML (from iframe preview):\n\`\`\`html\n${context.pageHTML.slice(0, 15000)}\n\`\`\``);
   }
-
-  if (context.pageUrl) {
-    systemParts.push(`\nCurrent page URL: ${context.pageUrl}`);
-  }
-
-  if (context.customerName) {
-    systemParts.push(`\nCustomer: ${context.customerName}`);
-  }
-
-  if (context.siteContext) {
-    systemParts.push(context.siteContext);
-  }
+  if (context.pageUrl) parts.push(`\nCurrent page URL: ${context.pageUrl}`);
+  if (context.customerName) parts.push(`\nCustomer: ${context.customerName}`);
+  if (context.siteContext) parts.push(context.siteContext);
 
   if (context.org) {
     const o = context.org;
-    systemParts.push(`\n## Connected AEM Environment
+    parts.push(`\n## Connected AEM Environment
 - **Organization**: ${o.name} (${o.orgId})
 - **Repository**: ${o.repo} (branch: ${o.branch})
 - **Tier**: ${o.tier}
@@ -230,6 +358,15 @@ export async function chat(userMessage, context = {}) {
 You are working with the ${o.name} AEM environment. Reference this org context when discussing pages, blocks, publishing, and content operations.`);
   }
 
+  return parts.join('\n');
+}
+
+/* ── Non-Streaming Chat (legacy, used by analyzeBrief etc.) ── */
+export async function chat(userMessage, context = {}) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('Claude API key not configured');
+
+  const system = buildSystemParts(context);
   const messages = Array.isArray(userMessage)
     ? userMessage
     : [{ role: 'user', content: userMessage }];
@@ -245,8 +382,9 @@ You are working with the ${o.name} AEM environment. Reference this org context w
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 8192,
-      system: systemParts.join('\n'),
+      system,
       messages,
+      tools: AEM_TOOLS,
     }),
   });
 
@@ -256,9 +394,29 @@ You are working with the ${o.name} AEM environment. Reference this org context w
   }
 
   const data = await resp.json();
-  return data.content[0].text;
+
+  // Handle tool use loop (non-streaming)
+  if (data.stop_reason === 'tool_use') {
+    const allMessages = [...messages, { role: 'assistant', content: data.content }];
+
+    const toolResults = [];
+    for (const block of data.content) {
+      if (block.type === 'tool_use') {
+        const result = await executeTool(block.name, block.input);
+        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
+      }
+    }
+    allMessages.push({ role: 'user', content: toolResults });
+
+    // Recursive call for multi-turn tool use
+    return chat(allMessages, context);
+  }
+
+  const textBlock = data.content.find((b) => b.type === 'text');
+  return textBlock?.text || '';
 }
 
+/* ── Governance Analysis ── */
 export async function analyzeGovernance(pageHTML, pageUrl) {
   const prompt = `Analyze this AEM page for governance compliance. Check:
 
@@ -278,6 +436,7 @@ Be specific — reference actual elements from the HTML.`;
   return chat(prompt, { pageHTML, pageUrl });
 }
 
+/* ── Brief Analysis ── */
 export async function analyzeBrief(briefText) {
   const prompt = `Analyze this campaign brief and extract structured requirements for creating an AEM page:
 
@@ -298,6 +457,7 @@ Format as a clear, actionable checklist.`;
   return chat(prompt, {});
 }
 
+/* ── Page Content Generation ── */
 export async function generatePageContent(briefAnalysis, customerName) {
   const prompt = `Based on this campaign brief analysis, generate AEM Edge Delivery Services page content.
 
@@ -318,63 +478,114 @@ Use EDS block table format where appropriate.`;
   return chat(prompt, { customerName });
 }
 
-export async function streamChat(userMessage, context, onChunk) {
+/* ── Streaming Chat with Tool Use ── */
+/*
+ * This is the main chat function. It streams the AI response and handles
+ * tool calls automatically. When the AI wants to call a tool:
+ * 1. The text so far is streamed to onChunk
+ * 2. onToolCall fires with the tool name and input
+ * 3. The tool is executed client-side
+ * 4. onToolResult fires with the result
+ * 5. A new streaming request is made with the tool result
+ * 6. The AI's follow-up response streams to onChunk
+ *
+ * This loop continues until the AI finishes without calling tools.
+ */
+export async function streamChat(userMessage, context, onChunk, onToolCall, onToolResult) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Claude API key not configured');
 
-  const systemParts = [AEM_SYSTEM_PROMPT, buildCustomerContext(), buildKnownSitesPrompt()];
-  if (context.pageHTML) {
-    systemParts.push(`\n\nCurrent page HTML:\n\`\`\`html\n${context.pageHTML.slice(0, 15000)}\n\`\`\``);
-  }
-  if (context.pageUrl) systemParts.push(`\nCurrent page URL: ${context.pageUrl}`);
-  if (context.customerName) systemParts.push(`\nCustomer: ${context.customerName}`);
-  if (context.siteContext) systemParts.push(context.siteContext);
-
-  if (context.org) {
-    const o = context.org;
-    systemParts.push(`\n## Connected AEM Environment
-- **Organization**: ${o.name} (${o.orgId})
-- **Repository**: ${o.repo} (branch: ${o.branch})
-- **Tier**: ${o.tier}
-- **Environment**: ${o.env}
-- **Services**: ${o.services?.join(', ') || 'EDS'}
-- **Preview**: ${o.previewOrigin}
-- **Live**: ${o.liveOrigin}
-- **DA Path**: admin.da.live/source/${o.daOrg}/${o.daRepo}
-
-You are working with the ${o.name} AEM environment. Reference this org context when discussing pages, blocks, publishing, and content operations.`);
-  }
-
-  const messages = Array.isArray(userMessage)
-    ? userMessage
+  const system = buildSystemParts(context);
+  let messages = Array.isArray(userMessage)
+    ? [...userMessage]
     : [{ role: 'user', content: userMessage }];
 
-  const resp = await fetch(CLAUDE_API, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 8192,
-      stream: true,
-      system: systemParts.join('\n'),
-      messages,
-    }),
-  });
+  let fullText = '';
+  const MAX_TOOL_ROUNDS = 8;
 
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Claude API error: ${resp.status}`);
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const resp = await fetch(CLAUDE_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 8192,
+        stream: true,
+        system,
+        messages,
+        tools: AEM_TOOLS,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Claude API error: ${resp.status}`);
+    }
+
+    // Parse the streamed response, collecting text and tool_use blocks
+    const { text, contentBlocks, stopReason } = await parseToolStream(resp, (chunk) => {
+      fullText += chunk;
+      onChunk(chunk, fullText);
+    });
+
+    // If no tool use, we're done
+    if (stopReason !== 'tool_use') break;
+
+    // Collect tool_use blocks from the response
+    const toolUseBlocks = contentBlocks.filter((b) => b.type === 'tool_use');
+    if (toolUseBlocks.length === 0) break;
+
+    // Add the full assistant response (text + tool_use blocks) to messages
+    messages.push({ role: 'assistant', content: contentBlocks });
+
+    // Execute each tool and collect results
+    const toolResultContent = [];
+    for (const toolBlock of toolUseBlocks) {
+      if (onToolCall) onToolCall(toolBlock.name, toolBlock.input);
+
+      const result = await executeTool(toolBlock.name, toolBlock.input);
+
+      if (onToolResult) onToolResult(toolBlock.name, result);
+
+      toolResultContent.push({
+        type: 'tool_result',
+        tool_use_id: toolBlock.id,
+        content: result,
+      });
+    }
+
+    // Add tool results as user message and continue the loop
+    messages.push({ role: 'user', content: toolResultContent });
   }
 
+  return fullText;
+}
+
+/* ── Stream Parser with Tool Use Support ── */
+/*
+ * Parses a streaming SSE response from Claude, handling both
+ * content_block_delta (text) and tool_use blocks.
+ *
+ * Returns: { text, contentBlocks, stopReason }
+ * - text: accumulated text from text blocks
+ * - contentBlocks: array of complete content blocks (text + tool_use)
+ * - stopReason: 'end_turn' | 'tool_use' | etc.
+ */
+async function parseToolStream(resp, onTextChunk) {
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
-  let fullText = '';
   let buffer = '';
+  let text = '';
+  let stopReason = 'end_turn';
+
+  // Track content blocks being built
+  const contentBlocks = []; // final assembled blocks
+  const blockBuilders = {}; // index → partial block data
 
   while (true) {
     const { done, value } = await reader.read();
@@ -385,19 +596,66 @@ You are working with the ${o.name} AEM environment. Reference this org context w
     buffer = lines.pop();
 
     for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6);
-        if (data === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            fullText += parsed.delta.text;
-            onChunk(parsed.delta.text, fullText);
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6);
+      if (data === '[DONE]') continue;
+
+      let parsed;
+      try { parsed = JSON.parse(data); } catch { continue; }
+
+      switch (parsed.type) {
+        case 'content_block_start': {
+          const idx = parsed.index;
+          const block = parsed.content_block;
+          if (block.type === 'text') {
+            blockBuilders[idx] = { type: 'text', text: '' };
+          } else if (block.type === 'tool_use') {
+            blockBuilders[idx] = { type: 'tool_use', id: block.id, name: block.name, input: '' };
           }
-        } catch { /* skip parse errors in stream */ }
+          break;
+        }
+
+        case 'content_block_delta': {
+          const idx = parsed.index;
+          const delta = parsed.delta;
+          const builder = blockBuilders[idx];
+          if (!builder) break;
+
+          if (delta.type === 'text_delta' && builder.type === 'text') {
+            builder.text += delta.text;
+            text += delta.text;
+            onTextChunk(delta.text);
+          } else if (delta.type === 'input_json_delta' && builder.type === 'tool_use') {
+            builder.input += delta.partial_json;
+          }
+          break;
+        }
+
+        case 'content_block_stop': {
+          const idx = parsed.index;
+          const builder = blockBuilders[idx];
+          if (!builder) break;
+
+          if (builder.type === 'text') {
+            contentBlocks.push({ type: 'text', text: builder.text });
+          } else if (builder.type === 'tool_use') {
+            let parsedInput = {};
+            try { parsedInput = JSON.parse(builder.input || '{}'); } catch { /* empty input */ }
+            contentBlocks.push({ type: 'tool_use', id: builder.id, name: builder.name, input: parsedInput });
+          }
+          delete blockBuilders[idx];
+          break;
+        }
+
+        case 'message_delta': {
+          if (parsed.delta?.stop_reason) {
+            stopReason = parsed.delta.stop_reason;
+          }
+          break;
+        }
       }
     }
   }
 
-  return fullText;
+  return { text, contentBlocks, stopReason };
 }
