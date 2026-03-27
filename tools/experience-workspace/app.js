@@ -573,6 +573,21 @@ const TOOL_SUGGESTIONS = {
     { icon: '🎯', label: 'Setup A/B test', prompt: 'Create an A/B test on this published page' },
     { icon: '📋', label: 'Notify stakeholders', prompt: 'Create a Workfront task to notify the team about the new publish' },
   ],
+  list_destinations: [
+    { icon: '🏥', label: 'Check health', prompt: 'Get destination health summary — any issues I should know about?' },
+    { icon: '📊', label: 'View flow runs', prompt: 'Show me recent data flow runs across all destinations' },
+    { icon: '🔧', label: 'Fix failing', prompt: 'Investigate and suggest fixes for any failing destinations' },
+  ],
+  list_destination_flow_runs: [
+    { icon: '🏥', label: 'Health dashboard', prompt: 'Get the overall destination health dashboard' },
+    { icon: '🔍', label: 'Investigate failures', prompt: 'Investigate the failed flow runs and recommend fixes' },
+    { icon: '📋', label: 'Create fix task', prompt: 'Create a Workfront task for the destination issues found' },
+  ],
+  get_destination_health: [
+    { icon: '📊', label: 'Detailed flow runs', prompt: 'Show me detailed flow runs for the destinations with issues' },
+    { icon: '🔔', label: 'Alert on issues', prompt: 'Create a support ticket for the destination health issues' },
+    { icon: '👥', label: 'Check segments', prompt: 'Show me the audience segments feeding these destinations' },
+  ],
 };
 
 function getContextualSuggestions(toolsCalledSet) {
@@ -824,6 +839,9 @@ function formatToolInput(toolName, input) {
     case 'analyze_journey_conflicts': return `"${(input.journey_name || '').slice(0, 25)}"`;
     case 'create_support_ticket': return `"${(input.subject || '').slice(0, 30)}"`;
     case 'get_ticket_status': return `"${input.case_id || ''}"`;
+    case 'list_destinations': return `${input.status_filter || 'all'}${input.type_filter ? ` (${input.type_filter})` : ''}`;
+    case 'list_destination_flow_runs': return `"${input.destination_id || 'all'}"${input.hours ? ` ${input.hours}h` : ''}`;
+    case 'get_destination_health': return input.include_flow_details ? 'detailed' : 'summary';
     default: {
       const str = JSON.stringify(input);
       return str.length > 40 ? str.slice(0, 37) + '...' : str;

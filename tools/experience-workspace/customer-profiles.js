@@ -71,6 +71,7 @@ export const PROFILES = {
       { name: 'AEM Content', env: 'Prod', type: 'CUSTOM', status: 'live' },
       { name: 'AEM DA', env: 'Prod', type: 'CUSTOM', status: 'live' },
       { name: 'AEM Odin', env: 'Prod', type: 'CUSTOM', status: 'live' },
+      { name: 'AEP Destinations MCP', env: 'Prod', type: 'CUSTOM', status: 'live' },
       { name: 'GitHub Integration', env: 'Prod', type: 'NATIVE', status: 'live' },
     ],
 
@@ -86,6 +87,7 @@ export const PROFILES = {
       aemContent: { name: 'AEM Content', mcp: 'AEM Content - Prod', status: 'live', note: 'Content read/write, launches, fragments' },
       aemDA: { name: 'AEM DA', mcp: 'AEM DA - Prod', status: 'live', note: 'Document Authoring — real read/write/preview/publish via admin.da.live' },
       aemOdin: { name: 'AEM Odin', mcp: 'AEM Odin Prod', status: 'live', note: 'AEM Sites management and authoring' },
+      destinations: { name: 'AEP Destinations', mcp: 'AEP Destinations MCP - Prod', status: 'live', endpoint: 'aep-destinations-mcp.adobe.io/mcp', note: 'Destination data flows, health monitoring, activation status — MVP read-only (13 tools)' },
       github: { name: 'GitHub Integration', mcp: 'GitHub Integration', status: 'live', note: 'Repo access, PR management, code sync' },
       workfront: { name: 'Workfront', mcp: 'Workfront WOA', status: 'active', note: 'P1 skills integrated — campaign ops' },
     },
@@ -104,6 +106,8 @@ export const PROFILES = {
       { capability: 'Creative generation', mcp: 'Adobe Express MCP - Prod', ready: true },
       { capability: 'Vector editing', mcp: 'Adobe Illustrator MCP - Stage', ready: true },
       { capability: 'GitHub repo/PR management', mcp: 'GitHub Integration', ready: true },
+      { capability: 'Destination data flow health', mcp: 'AEP Destinations MCP - Prod', ready: true, endpoint: 'aep-destinations-mcp.adobe.io/mcp' },
+      { capability: 'Destination activation status', mcp: 'AEP Destinations MCP - Prod', ready: true },
       { capability: 'Audience creation/sharing', mcp: 'AEP + Target', ready: true },
     ],
 
@@ -131,6 +135,26 @@ export const PROFILES = {
       { name: 'EDS Onboarding Series', status: 'active', messages_sent: 14320, open_rate: '38.1%', conversion: '12.4%' },
       { name: 'Cloud Migration Nurture', status: 'active', messages_sent: 9840, open_rate: '31.7%', conversion: '7.2%' },
       { name: 'Feature Adoption — Agentic AI', status: 'draft', messages_sent: 0, open_rate: 'N/A', conversion: 'N/A' },
+    ],
+
+    /* ── Destinations (AEP Destinations MCP — curated) ── */
+    destinations: [
+      { id: 'dest-fb-001', name: 'Facebook Custom Audiences', type: 'social', status: 'active', connectionSpec: 'facebook-custom-audiences', flowRunsLast24h: 12, failedRuns: 0, profilesActivated: 142300, lastRun: '2h ago' },
+      { id: 'dest-ga-002', name: 'Google Ads Customer Match', type: 'advertising', status: 'active', connectionSpec: 'google-ads-customer-match', flowRunsLast24h: 8, failedRuns: 1, profilesActivated: 87600, lastRun: '45m ago' },
+      { id: 'dest-sf-003', name: 'Salesforce Marketing Cloud', type: 'email-marketing', status: 'active', connectionSpec: 'salesforce-marketing-cloud', flowRunsLast24h: 6, failedRuns: 0, profilesActivated: 63400, lastRun: '3h ago' },
+      { id: 'dest-s3-004', name: 'Amazon S3 (Data Lake Export)', type: 'cloud-storage', status: 'active', connectionSpec: 'amazon-s3', flowRunsLast24h: 4, failedRuns: 0, profilesActivated: 293300, lastRun: '1h ago' },
+      { id: 'dest-tt-005', name: 'The Trade Desk', type: 'advertising', status: 'active', connectionSpec: 'the-trade-desk', flowRunsLast24h: 8, failedRuns: 0, profilesActivated: 218700, lastRun: '30m ago' },
+      { id: 'dest-brz-006', name: 'Braze', type: 'mobile-engagement', status: 'warning', connectionSpec: 'braze', flowRunsLast24h: 6, failedRuns: 2, profilesActivated: 41200, lastRun: '4h ago' },
+      { id: 'dest-http-007', name: 'HTTP API (Internal Analytics)', type: 'streaming', status: 'active', connectionSpec: 'http-api', flowRunsLast24h: 288, failedRuns: 3, profilesActivated: 0, lastRun: '5m ago' },
+    ],
+
+    destinationFlowRuns: [
+      { flowRunId: 'fr-001', destinationId: 'dest-fb-001', status: 'success', recordsReceived: 14230, recordsActivated: 14118, recordsFailed: 112, startTime: '2h ago', duration: '4m 12s' },
+      { flowRunId: 'fr-002', destinationId: 'dest-ga-002', status: 'partial_success', recordsReceived: 8760, recordsActivated: 8540, recordsFailed: 220, startTime: '45m ago', duration: '6m 38s', errorCategory: 'INVALID_IDENTITIES', errorMessage: '220 profiles missing required Google Ads identity (gclid or email)' },
+      { flowRunId: 'fr-003', destinationId: 'dest-sf-003', status: 'success', recordsReceived: 6340, recordsActivated: 6340, recordsFailed: 0, startTime: '3h ago', duration: '2m 54s' },
+      { flowRunId: 'fr-004', destinationId: 'dest-s3-004', status: 'success', recordsReceived: 29330, recordsActivated: 29330, recordsFailed: 0, startTime: '1h ago', duration: '8m 22s' },
+      { flowRunId: 'fr-005', destinationId: 'dest-brz-006', status: 'failed', recordsReceived: 4120, recordsActivated: 0, recordsFailed: 4120, startTime: '4h ago', duration: '1m 03s', errorCategory: 'AUTH_EXPIRED', errorMessage: 'Braze API key expired — credential renewal required' },
+      { flowRunId: 'fr-006', destinationId: 'dest-tt-005', status: 'success', recordsReceived: 21870, recordsActivated: 21870, recordsFailed: 0, startTime: '30m ago', duration: '5m 44s' },
     ],
 
     sampleCustomers: [

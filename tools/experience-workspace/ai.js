@@ -647,6 +647,42 @@ const AEM_TOOLS = [
       required: ['case_id'],
     },
   },
+
+  /* ─── AEP Destinations MCP (read-only MVP) ─── */
+
+  {
+    name: 'list_destinations',
+    description: 'AEP Destinations MCP — List all configured destination connections in Adobe Experience Platform. Returns destination name, type, status, activation health, and recent flow run summary.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status_filter: { type: 'string', enum: ['active', 'warning', 'failed', 'all'], description: 'Filter by destination health status. Default: all.' },
+        type_filter: { type: 'string', description: 'Filter by destination type (social, advertising, email-marketing, cloud-storage, streaming)' },
+      },
+    },
+  },
+  {
+    name: 'list_destination_flow_runs',
+    description: 'AEP Destinations MCP — List recent data flow runs for a specific destination or all destinations. Shows records received, activated, failed, duration, and error details for failed runs.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        destination_id: { type: 'string', description: 'Destination ID to filter flow runs. Omit for all destinations.' },
+        status_filter: { type: 'string', enum: ['success', 'partial_success', 'failed', 'all'], description: 'Filter by flow run status. Default: all.' },
+        hours: { type: 'number', description: 'Look back window in hours. Default: 24.' },
+      },
+    },
+  },
+  {
+    name: 'get_destination_health',
+    description: 'AEP Destinations MCP — Get aggregated health summary across all destination connections. Returns total destinations, active count, warning count, failed count, total profiles activated, and recent failures with error categories.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        include_flow_details: { type: 'boolean', description: 'Include per-destination flow run breakdown. Default: false.' },
+      },
+    },
+  },
 ];
 
 /* ── Tool → Agent Name Mapping (for UI badges) ── */
@@ -704,6 +740,10 @@ export const TOOL_AGENT_MAP = {
   // Product Support Agent
   create_support_ticket: 'Product Support Agent',
   get_ticket_status: 'Product Support Agent',
+  // AEP Destinations MCP
+  list_destinations: 'Destinations MCP',
+  list_destination_flow_runs: 'Destinations MCP',
+  get_destination_health: 'Destinations MCP',
 };
 
 /* ── Client-Side Tool Executor ── */
@@ -2244,6 +2284,139 @@ async function executeTool(name, input) {
       }, null, 2);
     }
 
+    /* ─── AEP Destinations MCP (read-only MVP) ─── */
+
+    case 'list_destinations': {
+      const dests = profile.destinations || [];
+      const statusFilter = input.status_filter || 'all';
+      const typeFilter = input.type_filter || null;
+      let filtered = dests;
+      if (statusFilter !== 'all') filtered = filtered.filter((d) => d.status === statusFilter);
+      if (typeFilter) filtered = filtered.filter((d) => d.type === typeFilter);
+
+      return JSON.stringify({
+        total_destinations: dests.length,
+        filtered_count: filtered.length,
+        destinations: filtered.map((d) => ({
+          id: d.id,
+          name: d.name,
+          type: d.type,
+          status: d.status,
+          connection_spec: d.connectionSpec,
+          flow_runs_last_24h: d.flowRunsLast24h,
+          failed_runs: d.failedRuns,
+          profiles_activated: d.profilesActivated,
+          last_run: d.lastRun,
+        })),
+        summary: {
+          active: dests.filter((d) => d.status === 'active').length,
+          warning: dests.filter((d) => d.status === 'warning').length,
+          failed: dests.filter((d) => d.status === 'failed').length,
+          total_profiles_activated: dests.reduce((sum, d) => sum + (d.profilesActivated || 0), 0),
+        },
+        message: `${filtered.length} destination(s) found${statusFilter !== 'all' ? ` with status "${statusFilter}"` : ''}${typeFilter ? ` of type "${typeFilter}"` : ''}. ${dests.filter((d) => d.failedRuns > 0).length} destination(s) have recent failures.`,
+        _source: 'connected',
+        source: 'AEP Destinations MCP — Prod',
+      }, null, 2);
+    }
+
+    case 'list_destination_flow_runs': {
+      const allRuns = profile.destinationFlowRuns || [];
+      const destId = input.destination_id || null;
+      const statusFilter = input.status_filter || 'all';
+      let filtered = allRuns;
+      if (destId) filtered = filtered.filter((r) => r.destinationId === destId);
+      if (statusFilter !== 'all') filtered = filtered.filter((r) => r.status === statusFilter);
+
+      const dests = profile.destinations || [];
+      const enriched = filtered.map((r) => {
+        const dest = dests.find((d) => d.id === r.destinationId);
+        return {
+          flow_run_id: r.flowRunId,
+          destination_name: dest?.name || r.destinationId,
+          destination_type: dest?.type || 'unknown',
+          status: r.status,
+          records_received: r.recordsReceived,
+          records_activated: r.recordsActivated,
+          records_failed: r.recordsFailed,
+          success_rate: `${((r.recordsActivated / r.recordsReceived) * 100).toFixed(1)}%`,
+          start_time: r.startTime,
+          duration: r.duration,
+          ...(r.errorCategory && { error_category: r.errorCategory }),
+          ...(r.errorMessage && { error_message: r.errorMessage }),
+        };
+      });
+
+      return JSON.stringify({
+        total_flow_runs: enriched.length,
+        flow_runs: enriched,
+        summary: {
+          success: filtered.filter((r) => r.status === 'success').length,
+          partial_success: filtered.filter((r) => r.status === 'partial_success').length,
+          failed: filtered.filter((r) => r.status === 'failed').length,
+          total_records_activated: filtered.reduce((sum, r) => sum + r.recordsActivated, 0),
+          total_records_failed: filtered.reduce((sum, r) => sum + r.recordsFailed, 0),
+        },
+        message: `${enriched.length} flow run(s) returned. ${filtered.filter((r) => r.status === 'failed').length} failed, ${filtered.filter((r) => r.status === 'partial_success').length} partial success.`,
+        _source: 'connected',
+        source: 'AEP Destinations MCP — Prod',
+      }, null, 2);
+    }
+
+    case 'get_destination_health': {
+      const dests = profile.destinations || [];
+      const runs = profile.destinationFlowRuns || [];
+      const failedRuns = runs.filter((r) => r.status === 'failed');
+      const warningDests = dests.filter((d) => d.status === 'warning' || d.failedRuns > 0);
+
+      const health = {
+        overall_status: failedRuns.length > 0 ? 'degraded' : 'healthy',
+        total_destinations: dests.length,
+        active: dests.filter((d) => d.status === 'active').length,
+        warning: dests.filter((d) => d.status === 'warning').length,
+        failed: dests.filter((d) => d.status === 'failed').length,
+        total_profiles_activated_24h: dests.reduce((sum, d) => sum + (d.profilesActivated || 0), 0),
+        total_flow_runs_24h: dests.reduce((sum, d) => sum + (d.flowRunsLast24h || 0), 0),
+        total_failed_runs_24h: dests.reduce((sum, d) => sum + (d.failedRuns || 0), 0),
+        issues: warningDests.map((d) => {
+          const destRuns = runs.filter((r) => r.destinationId === d.id && r.status === 'failed');
+          return {
+            destination: d.name,
+            destination_id: d.id,
+            status: d.status,
+            failed_runs: d.failedRuns,
+            error_categories: [...new Set(destRuns.map((r) => r.errorCategory).filter(Boolean))],
+            recommended_action: destRuns[0]?.errorCategory === 'AUTH_EXPIRED'
+              ? 'Renew API credentials in AEP Destinations UI'
+              : destRuns[0]?.errorCategory === 'INVALID_IDENTITIES'
+                ? 'Review identity mapping configuration'
+                : 'Investigate flow run logs for details',
+          };
+        }),
+      };
+
+      if (input.include_flow_details) {
+        health.flow_details = dests.map((d) => ({
+          destination: d.name,
+          id: d.id,
+          type: d.type,
+          runs_24h: d.flowRunsLast24h,
+          failed: d.failedRuns,
+          profiles: d.profilesActivated,
+          last_run: d.lastRun,
+        }));
+      }
+
+      return JSON.stringify({
+        ...health,
+        message: health.overall_status === 'healthy'
+          ? `All ${dests.length} destinations healthy. ${health.total_profiles_activated_24h.toLocaleString()} profiles activated in last 24h.`
+          : `${warningDests.length} destination(s) need attention. ${failedRuns.length} flow run(s) failed. ${health.total_profiles_activated_24h.toLocaleString()} profiles activated overall.`,
+        _source: 'connected',
+        source: 'AEP Destinations MCP — Prod',
+      }, null, 2);
+    }
+
     default:
       return JSON.stringify({ error: `Unknown tool: ${name}` });
   }
@@ -2257,7 +2430,7 @@ const AEM_SYSTEM_PROMPT = `You are the **Experience Workspace AI** — an expert
 You are the AI brain behind AEM's agentic content supply chain. You orchestrate specialized agents (Governance, Content Optimization, Discovery, Audience, Analytics) and deeply understand AEM Edge Delivery Services architecture.
 
 ## Your MCP Tools — Adobe AI Agent Toolbelt
-You have 34 tools spanning 14 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
+You have 37 tools spanning 15 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
 
 ### AEM Content MCP (content read/write)
 - **get_aem_sites** — Discover all AEM Edge Delivery sites. Call first when users mention any site.
@@ -2343,6 +2516,19 @@ These tools write to the real Document Authoring API. The user must be signed in
 
 ### Acrobat MCP (PDF Services)
 - **extract_pdf_content** — Extract structured content from a PDF document (text, tables, images, metadata).
+
+### AEP Destinations MCP (destination health & activation — read-only MVP)
+These tools connect to the AEP Destinations MCP Server (Spring AI / Java 21, HTTP + SSE transport, aep-destinations-mcp.adobe.io/mcp).
+MVP is read-only — 13 tools spanning Flow Service, DIS, and DDS.
+- **list_destinations** — List all configured destination connections (Facebook, Google Ads, Salesforce MC, S3, Trade Desk, Braze, etc.). Shows type, status, activation health, and recent flow run summary.
+- **list_destination_flow_runs** — List recent data flow runs for a destination. Shows records received/activated/failed, duration, and error details. Filter by destination_id and status.
+- **get_destination_health** — Aggregated health dashboard across all destinations. Total profiles activated, failed runs, warning destinations, and recommended actions for issues (credential renewal, identity mapping fixes).
+
+Use these when users ask about:
+- "What destinations are configured?" → list_destinations
+- "Are any data flows failing?" → get_destination_health or list_destination_flow_runs with status_filter=failed
+- "How many profiles were activated to Facebook?" → list_destinations with type_filter
+- "Show me the health of my destinations" → get_destination_health with include_flow_details=true
 
 **CRITICAL RULES**:
 1. When users mention a site (like "Frescopa", "SecurBank", "WKND"), ALWAYS call get_aem_sites → get_aem_site_pages → get_page_content to fetch real content. Never guess.
