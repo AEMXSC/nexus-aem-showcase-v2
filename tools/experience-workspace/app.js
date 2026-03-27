@@ -57,9 +57,6 @@ const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
 const previewFrame = document.getElementById('previewFrame');
-const previewPlaceholder = document.getElementById('previewPlaceholder');
-const signalOverlay = document.getElementById('signalOverlay');
-const governanceBar = document.getElementById('governanceBar');
 const authBtn = document.getElementById('authBtn');
 const authStatus = document.getElementById('authStatus');
 const settingsBtn = document.getElementById('settingsBtn');
@@ -325,7 +322,7 @@ async function runRealGovernance() {
         else checks[key] = true;
       }
     });
-    updateGovernanceBar(scanResult.score, checks);
+    // Governance results displayed in chat (bar removed in AEMCoder redesign)
   } else {
     fill.style.width = '100%';
     addMessage('assistant', '⚠ Could not fetch page content for scanning. Check the preview URL.', 'Governance Scanner');
@@ -643,27 +640,9 @@ async function runPersonalizeFlow() {
   await handleRealChat('Analyze this page and suggest personalization strategies. Identify content sections that could be personalized, recommend audience segments, and estimate potential impact. Reference AEP and Target MCP capabilities.');
 }
 
-/* ── Governance Bar ── */
-function updateGovernanceBar(score, checks) {
-  const items = governanceBar.querySelectorAll('.gov-item');
-  const labels = ['brand', 'legal', 'a11y', 'seo'];
-  items.forEach((item, i) => {
-    const val = checks[labels[i]];
-    item.className = 'gov-item';
-    const icon = item.querySelector('.gov-icon');
-    if (val === true) { item.classList.add('gov-pass'); icon.textContent = '✓'; }
-    else if (val === 'warn') { item.classList.add('gov-warn'); icon.textContent = '⚠'; }
-    else if (val === 'fail' || val === false) { item.classList.add('gov-fail'); icon.textContent = '❌'; }
-  });
-  const scoreEl = governanceBar.querySelector('.gov-score');
-  scoreEl.textContent = `Compliance: ${score}%`;
-  scoreEl.style.color = score >= 90 ? 'var(--green)' : score >= 80 ? 'var(--yellow)' : 'var(--accent)';
-}
-
-/* ── Preview ── */
+/* ── Preview (hidden iframe for page context) ── */
 function loadPreview() {
   previewFrame.src = PREVIEW_URL;
-  previewPlaceholder.classList.add('hidden');
 }
 
 /* ── Flow Router ── */
@@ -735,15 +714,7 @@ function handleUserInput() {
 }
 
 /* ── Event Listeners ── */
-document.querySelectorAll('.mode-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.mode-btn').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    if (btn.dataset.mode === 'preview' && previewFrame.src === 'about:blank') loadPreview();
-  });
-});
-
-document.querySelectorAll('.prompt-btn').forEach((btn) => {
+document.querySelectorAll('.prompt-chip').forEach((btn) => {
   btn.addEventListener('click', () => {
     const fn = FLOWS[btn.dataset.flow];
     if (fn) fn();
@@ -753,16 +724,6 @@ document.querySelectorAll('.prompt-btn').forEach((btn) => {
 sendBtn.addEventListener('click', handleUserInput);
 chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleUserInput(); }
-});
-
-signalOverlay.addEventListener('click', (e) => {
-  if (e.target.classList.contains('signal-fix-btn')) {
-    signalOverlay.style.display = 'none';
-    if (ai.hasApiKey()) {
-      addMessage('user', 'Apply the suggested performance fix');
-      handleRealChat('Apply the suggested fix for the performance issue identified on this page. Explain what you changed and the expected impact.');
-    }
-  }
 });
 
 if (authBtn) {
@@ -782,10 +743,10 @@ if (railSettingsBtn) {
   railSettingsBtn.addEventListener('click', toggleSettings);
 }
 
-// Icon rail panel switching
-document.querySelectorAll('.rail-btn[data-panel]').forEach((btn) => {
+// Sidebar panel switching
+document.querySelectorAll('.sidebar-btn[data-panel]').forEach((btn) => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.rail-btn[data-panel]').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.sidebar-btn[data-panel]').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
 
     const panel = btn.dataset.panel;
@@ -808,15 +769,9 @@ async function init() {
   const customerNameEl = document.querySelector('.customer-name');
   const customerMetaEl = document.querySelector('.customer-meta');
   if (customerNameEl) customerNameEl.textContent = AEM_ORG.name;
-  if (customerMetaEl) customerMetaEl.innerHTML = `${AEM_ORG.tier} &bull; ${AEM_ORG.env}`;
+  if (customerMetaEl) customerMetaEl.innerHTML = `&bull; ${AEM_ORG.tier} &bull; ${AEM_ORG.env}`;
 
-  // Set breadcrumb from org
-  const breadcrumbItems = document.querySelectorAll('.breadcrumb-item');
-  const breadcrumbFile = document.querySelector('.breadcrumb-file');
-  if (breadcrumbItems[0]) breadcrumbItems[0].textContent = AEM_ORG.orgId.toLowerCase();
-  if (breadcrumbItems[1]) breadcrumbItems[1].textContent = AEM_ORG.repo;
-  if (breadcrumbFile) breadcrumbFile.textContent = 'index';
-
+  // Load hidden preview frame for page context
   loadPreview();
 
   // Initialize IMS
