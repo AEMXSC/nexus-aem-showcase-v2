@@ -34,6 +34,7 @@ const settingsPanel = document.getElementById('settingsPanel');
 /* ── State ── */
 let conversationHistory = [];
 let isLiveMode = false;
+let pendingFile = null; // { name, type, size, content (text or base64), mediaType }
 
 /* ── Utility ── */
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -212,8 +213,23 @@ async function ensurePageContext() {
 }
 
 /* ── REAL: AI Chat (with native tool use) ── */
-async function handleRealChat(text) {
-  conversationHistory.push({ role: 'user', content: text });
+async function handleRealChat(text, file) {
+  // Build message content — with file attachment if present
+  let messageContent;
+  if (file && file.type === 'image') {
+    // Claude vision: send image as base64 + text
+    messageContent = [
+      { type: 'image', source: { type: 'base64', media_type: file.mediaType, data: file.content } },
+      { type: 'text', text: text || `Analyze this image: ${file.name}` },
+    ];
+  } else if (file && file.type === 'document') {
+    // Document: inject text content
+    messageContent = `${text || `Analyze this document: ${file.name}`}\n\n--- Attached file: ${file.name} ---\n${file.content.slice(0, 30000)}${file.content.length > 30000 ? '\n\n[... truncated]' : ''}`;
+  } else {
+    messageContent = text;
+  }
+
+  conversationHistory.push({ role: 'user', content: messageContent });
 
   await ensurePageContext();
   const ctx = getPageContext();
@@ -1148,26 +1164,56 @@ function matchSpecializedFlow(text) {
 
 function handleUserInput() {
   const text = chatInput.value.trim();
-  if (!text) return;
+  if (!text && !pendingFile) return;
   chatInput.value = '';
 
+  // Capture and clear pending file
+  const file = pendingFile;
+  pendingFile = null;
+  const indicator = document.querySelector('.file-attach-indicator');
+  if (indicator) indicator.remove();
+
+  const displayText = file
+    ? `${text || `Uploaded ${file.name}`}${text ? '' : ''}`
+    : text;
+
   // Always check for specialized flows first — even in AI mode
-  const specializedFlow = matchSpecializedFlow(text);
-  if (specializedFlow) {
-    addMessage('user', text);
-    setTimeout(() => specializedFlow(), 400);
-    return;
+  if (!file) {
+    const specializedFlow = matchSpecializedFlow(text);
+    if (specializedFlow) {
+      addMessage('user', displayText);
+      setTimeout(() => specializedFlow(), 400);
+      return;
+    }
   }
 
   // AI chat (with conversation history)
   if (ai.hasApiKey()) {
-    addMessage('user', text);
-    handleRealChat(text);
+    // Show user message with file badge if attached
+    if (file) {
+      addRawHTML(`
+        <div class="message user">
+          <div class="message-content">
+            <div class="upload-indicator" style="margin-bottom:6px">
+              <span class="file-icon">${file.type === 'image' ? '🖼' : '📄'}</span>
+              <div>
+                <div style="font-weight:500">${file.name}</div>
+                <div style="font-size:10px;color:var(--text-muted)">${(file.size / 1024).toFixed(0)} KB</div>
+              </div>
+            </div>
+            ${text ? `<div>${text}</div>` : ''}
+          </div>
+        </div>
+      `);
+    } else {
+      addMessage('user', displayText);
+    }
+    handleRealChat(text || `I've uploaded a file: ${file?.name}. Please analyze it.`, file);
     return;
   }
 
   // No API key — prompt to configure
-  addMessage('user', text);
+  addMessage('user', displayText);
   requireApiKey();
 }
 
@@ -1183,6 +1229,63 @@ sendBtn.addEventListener('click', handleUserInput);
 chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleUserInput(); }
 });
+
+// Attach file button (paperclip)
+const attachBtn = document.querySelector('.attach-btn');
+if (attachBtn) {
+  attachBtn.addEventListener('click', () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.pdf,.txt,.doc,.docx,.csv,.json,.html,.md,.png,.jpg,.jpeg,.gif,.webp,.svg';
+    fileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Show file indicator in input area
+      const existingIndicator = document.querySelector('.file-attach-indicator');
+      if (existingIndicator) existingIndicator.remove();
+
+      const indicator = document.createElement('div');
+      indicator.className = 'file-attach-indicator';
+      indicator.innerHTML = `
+        <span class="file-attach-icon">${file.type.startsWith('image/') ? '🖼' : '📄'}</span>
+        <span class="file-attach-name">${file.name}</span>
+        <span class="file-attach-size">${(file.size / 1024).toFixed(0)} KB</span>
+        <button class="file-attach-remove" title="Remove">✕</button>
+      `;
+      document.querySelector('.input-wrapper').prepend(indicator);
+      indicator.querySelector('.file-attach-remove').addEventListener('click', () => {
+        pendingFile = null;
+        indicator.remove();
+      });
+
+      // Read file content
+      try {
+        if (file.type.startsWith('image/')) {
+          // Images → base64 for Claude vision
+          const buffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          const base64 = btoa(binary);
+          pendingFile = { name: file.name, type: 'image', size: file.size, content: base64, mediaType: file.type };
+        } else if (file.type === 'application/pdf') {
+          // PDFs → extract text
+          const text = await extractPdfText(file);
+          pendingFile = { name: file.name, type: 'document', size: file.size, content: text, mediaType: file.type };
+        } else {
+          // Text files → read as text
+          const text = await file.text();
+          pendingFile = { name: file.name, type: 'document', size: file.size, content: text, mediaType: file.type };
+        }
+      } catch (err) {
+        indicator.remove();
+        addMessage('assistant', `Could not read file: ${err.message}`, 'System');
+      }
+    };
+    fileInput.click();
+  });
+}
 
 if (authBtn) {
   authBtn.addEventListener('click', () => {

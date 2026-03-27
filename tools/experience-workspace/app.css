@@ -690,6 +690,58 @@ html, body {
   border-radius: var(--radius-lg);
   padding: 6px 10px;
   transition: border-color 0.2s, box-shadow 0.2s;
+  flex-wrap: wrap;
+}
+
+/* File Attachment Indicator (above input) */
+.file-attach-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  margin-bottom: 2px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 12px;
+  animation: fadeIn 0.2s ease;
+  order: -1;
+}
+
+.file-attach-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.file-attach-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-attach-size {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.file-attach-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.file-attach-remove:hover {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 15%, transparent);
 }
 
 .input-wrapper:focus-within {
