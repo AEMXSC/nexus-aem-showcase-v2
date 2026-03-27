@@ -51,6 +51,7 @@ html, body {
   background: var(--panel-bg);
   border-right: 1px solid var(--panel-border);
   overflow: hidden;
+  position: relative;
 }
 
 .assistant-header {
@@ -728,6 +729,198 @@ html, body {
 .chat-messages::-webkit-scrollbar-thumb {
   background: var(--panel-border);
   border-radius: 4px;
+}
+
+/* ─── Phase 2: Auth & Settings ─── */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-status {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.auth-status .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.auth-status .status-dot.live {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.settings-btn:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.auth-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.auth-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.auth-btn.signed-in {
+  border-color: rgba(34, 197, 94, 0.3);
+  color: var(--green);
+}
+
+/* Settings panel */
+.settings-panel {
+  display: none;
+  position: absolute;
+  top: 44px;
+  right: 0;
+  width: 300px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 40%);
+}
+
+.settings-panel.visible {
+  display: block;
+}
+
+.settings-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.settings-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.settings-input {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.settings-input:focus {
+  border-color: var(--accent);
+}
+
+.settings-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.settings-divider {
+  height: 1px;
+  background: var(--panel-border);
+  margin: 12px 0;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-save {
+  flex: 1;
+  padding: 6px 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.settings-save:hover {
+  background: var(--accent-hover);
+}
+
+.settings-cancel {
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.settings-cancel:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* Streaming message content */
+.stream-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.stream-cursor::after {
+  content: '▊';
+  animation: blink 0.8s infinite;
+  color: var(--accent);
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 /* Responsive */
