@@ -47,6 +47,7 @@ function md(text) {
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     .replace(/^[-*] (.+)/gm, '<li>$1</li>')
     .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
     .replace(/<\/ul>\s*<ul>/g, '')
@@ -217,40 +218,75 @@ async function handleRealChat(text) {
   await ensurePageContext();
   const ctx = getPageContext();
 
-  // Tool call UI container — shows MCP tool calls as they happen (like Claude.ai)
+  // Tool call UI container — collapsible tool calls (like Claude.ai)
   let toolContainer = null;
   let toolCount = 0;
 
   // Track which agent badges have been shown
   const shownAgents = new Set();
+  const agentContainers = {};
 
   function onToolCall(toolName, toolInput) {
     toolCount++;
     const agentName = TOOL_AGENT_MAP[toolName] || 'Adobe Agent';
 
-    // Create a new tool container per agent (so each agent gets its own badge)
-    if (!toolContainer || !shownAgents.has(agentName)) {
+    // Create a new collapsible container per agent
+    if (!agentContainers[agentName]) {
       shownAgents.add(agentName);
       toolContainer = addRawHTML(`
-        <div class="agent-badge">${agentName}</div>
-        <div class="message-content mcp-tool-calls"></div>
+        <div class="tool-group" data-agent="${agentName}">
+          <div class="tool-group-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="tool-group-indicator"><span class="gen-dot active"></span></span>
+            <span class="tool-group-agent">${agentName}</span>
+            <span class="tool-group-count"></span>
+            <span class="tool-group-chevron">▾</span>
+          </div>
+          <div class="tool-group-body"></div>
+        </div>
       `);
+      agentContainers[agentName] = toolContainer.querySelector('.tool-group');
     }
-    const callsEl = toolContainer.querySelector('.mcp-tool-calls');
+
+    const group = agentContainers[agentName];
+    const bodyEl = group.querySelector('.tool-group-body');
     const toolId = `tool-call-${toolCount}`;
     const inputSummary = formatToolInput(toolName, toolInput);
-    callsEl.innerHTML += `
-      <div class="orchestration-step active" id="${toolId}">
-        <span class="step-indicator"><span class="gen-dot"></span></span>
-        <span class="step-agent">${toolName}(${inputSummary})</span>
+
+    bodyEl.innerHTML += `
+      <div class="tool-call-row active" id="${toolId}">
+        <span class="tool-call-dot"></span>
+        <span class="tool-call-name">${toolName}</span>
+        <span class="tool-call-args">(${inputSummary})</span>
+        <span class="tool-call-status">Running</span>
       </div>
     `;
+
+    // Update count badge
+    const count = bodyEl.querySelectorAll('.tool-call-row').length;
+    group.querySelector('.tool-group-count').textContent = count > 1 ? `${count} calls` : '';
+
     scrollChat();
   }
 
   function onToolResult(toolName) {
-    const stepEl = toolContainer?.querySelector(`#tool-call-${toolCount}`);
-    if (stepEl) stepEl.classList.replace('active', 'done');
+    const stepEl = document.querySelector(`#tool-call-${toolCount}`);
+    if (stepEl) {
+      stepEl.classList.replace('active', 'done');
+      stepEl.querySelector('.tool-call-status').textContent = 'Result';
+    }
+
+    // Check if all calls in this agent group are done — update the header dot
+    const agentName = TOOL_AGENT_MAP[toolName] || 'Adobe Agent';
+    const group = agentContainers[agentName];
+    if (group) {
+      const allDone = [...group.querySelectorAll('.tool-call-row')].every((r) => r.classList.contains('done'));
+      if (allDone) {
+        const dot = group.querySelector('.tool-group-header .gen-dot');
+        if (dot) dot.classList.replace('active', 'done');
+        // Auto-collapse completed agent groups after a short delay
+        setTimeout(() => { group.classList.add('collapsed'); scrollChat(); }, 800);
+      }
+    }
   }
 
   const streamEl = addStreamMessage('Experience Agent');
@@ -313,6 +349,9 @@ function formatToolInput(toolName, input) {
     case 'create_image_renditions': return `"${(input.asset_path || '').split('/').pop()}"`;
     case 'add_to_collection': return `"${(input.collection_name || '').slice(0, 25)}"`;
     case 'analyze_pipeline_failure': return `"${input.pipeline_id || ''}"`;
+    case 'analyze_journey_conflicts': return `"${(input.journey_name || '').slice(0, 25)}"`;
+    case 'create_support_ticket': return `"${(input.subject || '').slice(0, 30)}"`;
+    case 'get_ticket_status': return `"${input.case_id || ''}"`;
     default: {
       const str = JSON.stringify(input);
       return str.length > 40 ? str.slice(0, 37) + '...' : str;

@@ -89,12 +89,13 @@ const AEM_TOOLS = [
   },
   {
     name: 'patch_aem_page_content',
-    description: 'AEM Content MCP — Update specific content on an AEM page. Patches hero image, headline, body copy, CTA, metadata, or any block content.',
+    description: 'AEM Content MCP — Update specific content on an AEM page. Patches hero image, headline, body copy, CTA, metadata, or any block content. Include the etag from a previous get_page_content or copy_aem_page call to avoid conflicts.',
     input_schema: {
       type: 'object',
       properties: {
         page_path: { type: 'string', description: 'Page path to update' },
         site_id: { type: 'string', description: 'Target site' },
+        etag: { type: 'string', description: 'ETag from get_page_content or copy_aem_page — required to avoid conflict errors' },
         updates: {
           type: 'object',
           description: 'Content updates — keys are field names (hero_image, headline, body, cta_text, cta_url, metadata)',
@@ -541,6 +542,49 @@ const AEM_TOOLS = [
       required: ['collection_name', 'asset_paths'],
     },
   },
+
+  /* ─── Journey Agent (conflict analysis) ─── */
+
+  {
+    name: 'analyze_journey_conflicts',
+    description: 'Analyze a journey for scheduling conflicts, audience overlaps, and resource contention with other live journeys. Returns conflict types, severity, and resolution recommendations.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        journey_name: { type: 'string', description: 'Journey name to analyze for conflicts' },
+        conflict_type: { type: 'string', enum: ['all', 'scheduling', 'audience'], description: 'Type of conflict to check (default: all)' },
+      },
+      required: ['journey_name'],
+    },
+  },
+
+  /* ─── Product Support Agent ─── */
+
+  {
+    name: 'create_support_ticket',
+    description: 'Create a support ticket with Adobe Experience Cloud support. Returns case ID and tracking URL.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        subject: { type: 'string', description: 'Ticket subject' },
+        description: { type: 'string', description: 'Detailed description of the issue' },
+        product: { type: 'string', description: 'Product area (AEM, Target, Analytics, AEP, AJO)' },
+        priority: { type: 'string', enum: ['P1', 'P2', 'P3', 'P4'], description: 'Priority level (P1=critical, P4=low)' },
+      },
+      required: ['subject', 'description'],
+    },
+  },
+  {
+    name: 'get_ticket_status',
+    description: 'Get status and updates on an existing support ticket/case by case ID.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        case_id: { type: 'string', description: 'Support case ID (e.g., "E-12345")' },
+      },
+      required: ['case_id'],
+    },
+  },
 ];
 
 /* ── Tool → Agent Name Mapping (for UI badges) ── */
@@ -587,6 +631,11 @@ export const TOOL_AGENT_MAP = {
   create_image_renditions: 'Content Optimization Agent',
   // Discovery Agent (extended)
   add_to_collection: 'Discovery Agent',
+  // Journey Agent (extended)
+  analyze_journey_conflicts: 'Journey Agent',
+  // Product Support Agent
+  create_support_ticket: 'Product Support Agent',
+  get_ticket_status: 'Product Support Agent',
 };
 
 /* ── Client-Side Tool Executor ── */
@@ -637,7 +686,15 @@ async function executeTool(name, input) {
         const resp = await fetch(plainUrl);
         if (resp.ok) {
           const html = await resp.text();
-          return html.length > 15000 ? html.slice(0, 15000) + '\n\n[... truncated]' : html;
+          const etag = resp.headers.get('etag') || `W/"${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}"`;
+          const content = html.length > 15000 ? html.slice(0, 15000) + '\n\n[... truncated]' : html;
+          return JSON.stringify({
+            url: pageUrl,
+            etag,
+            content_length: html.length,
+            html: content,
+            hint: 'Use the etag value when calling patch_aem_page_content to avoid conflicts.',
+          }, null, 2);
         }
         return JSON.stringify({ error: `HTTP ${resp.status} fetching ${plainUrl}` });
       } catch (e) {
@@ -647,38 +704,82 @@ async function executeTool(name, input) {
 
     case 'copy_aem_page': {
       const pageId = `page-${Date.now().toString(36)}`;
-      const previewBase = profile.orgId ? `https://main--${profile.repo}--${profile.orgId.toLowerCase()}.aem.page` : 'https://main--site--org.aem.page';
+      const etag = `W/"${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}"`;
+      const org = profile.orgId?.toLowerCase() || 'org';
+      const repo = profile.repo || 'site';
+      const previewBase = `https://main--${repo}--${org}.aem.page`;
+      const previewUrl = `${previewBase}${input.destination_path}`;
+      const ueUrl = `https://experience.adobe.com/#/@${org}/aem/editor/canvas${input.destination_path}?repo=${repo}`;
+      const daUrl = `https://da.live/edit#/${org}/${repo}${input.destination_path}`;
       return JSON.stringify({
         status: 'created',
         page_id: pageId,
         path: input.destination_path,
         title: input.title,
         copied_from: input.source_path,
-        preview_url: `${previewBase}${input.destination_path}`,
+        etag,
+        preview_url: previewUrl,
+        edit_urls: {
+          universal_editor: ueUrl,
+          document_authoring: daUrl,
+        },
         message: `Page created at ${input.destination_path} from template ${input.source_path}`,
+        hint: 'Use the etag value when calling patch_aem_page_content to avoid conflicts. Open in Universal Editor or DA to edit visually.',
       }, null, 2);
     }
 
     case 'patch_aem_page_content': {
       const fields = Object.keys(input.updates || {});
+      const org = profile.orgId?.toLowerCase() || 'org';
+      const repo = profile.repo || 'site';
+      const previewBase = `https://main--${repo}--${org}.aem.page`;
+      const previewUrl = `${previewBase}${input.page_path}`;
+      const ueUrl = `https://experience.adobe.com/#/@${org}/aem/editor/canvas${input.page_path}?repo=${repo}`;
+      const daUrl = `https://da.live/edit#/${org}/${repo}${input.page_path}`;
+
+      // Simulate ETag conflict if no etag provided and this is not the first patch
+      if (!input.etag && input._retry) {
+        return JSON.stringify({
+          status: 'conflict',
+          error: 'ETag mismatch — the page was modified since you last read it.',
+          hint: 'Call get_page_content to fetch the current ETag, then retry patch_aem_page_content with the fresh etag value.',
+          page_path: input.page_path,
+        }, null, 2);
+      }
+
+      const newEtag = `W/"${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}"`;
       return JSON.stringify({
         status: 'updated',
         page_path: input.page_path,
         updated_fields: fields,
         field_count: fields.length,
+        etag: newEtag,
+        preview_url: previewUrl,
+        edit_urls: {
+          universal_editor: ueUrl,
+          document_authoring: daUrl,
+        },
         message: `Updated ${fields.length} field(s) on ${input.page_path}: ${fields.join(', ')}`,
+        hint: 'Page updated. Open in Universal Editor or DA to verify changes visually.',
       }, null, 2);
     }
 
     case 'create_aem_launch': {
       const launchId = `launch-${Date.now().toString(36)}`;
-      const previewBase = profile.orgId ? `https://main--${profile.repo}--${profile.orgId.toLowerCase()}.aem.page` : 'https://main--site--org.aem.page';
+      const org = profile.orgId?.toLowerCase() || 'org';
+      const repo = profile.repo || 'site';
+      const previewBase = `https://main--${repo}--${org}.aem.page`;
+      const previewUrl = `${previewBase}${input.page_path}?launch=${launchId}`;
+      const ueUrl = `https://experience.adobe.com/#/@${org}/aem/editor/canvas${input.page_path}?repo=${repo}&launch=${launchId}`;
       return JSON.stringify({
         status: 'created',
         launch_id: launchId,
         launch_name: input.launch_name,
         pages: [input.page_path],
-        preview_url: `${previewBase}${input.page_path}?launch=${launchId}`,
+        preview_url: previewUrl,
+        edit_urls: {
+          universal_editor: ueUrl,
+        },
         state: 'open',
         message: `Launch "${input.launch_name}" created. Page is in review, not live. Send for governance check before promoting.`,
       }, null, 2);
@@ -1699,6 +1800,95 @@ async function executeTool(name, input) {
       }, null, 2);
     }
 
+    /* ─── Journey Agent (conflict analysis) ─── */
+
+    case 'analyze_journey_conflicts': {
+      const journeyName = input.journey_name || 'Unknown Journey';
+      const conflictType = input.conflict_type || 'all';
+
+      const conflicts = [];
+      if (conflictType === 'all' || conflictType === 'scheduling') {
+        conflicts.push({
+          type: 'scheduling',
+          severity: 'medium',
+          conflicting_journey: 'Holiday Promotion 2026',
+          overlap_window: '2026-03-25T08:00:00Z to 2026-03-27T20:00:00Z',
+          details: `"${journeyName}" and "Holiday Promotion 2026" both target the same time window. Messages may compete for send capacity.`,
+          recommendation: 'Stagger send times by 4+ hours or merge into a single journey with branching logic.',
+        });
+      }
+      if (conflictType === 'all' || conflictType === 'audience') {
+        conflicts.push({
+          type: 'audience_overlap',
+          severity: 'high',
+          conflicting_journey: 'Spring Re-engagement Campaign',
+          overlap_percentage: 34.2,
+          overlapping_profiles: 28750,
+          details: `34.2% audience overlap (28,750 profiles) between "${journeyName}" and "Spring Re-engagement Campaign". These profiles will receive messages from both journeys.`,
+          recommendation: 'Add exclusion rules to avoid message fatigue, or consolidate audiences into a single journey.',
+        });
+      }
+
+      return JSON.stringify({
+        journey_name: journeyName,
+        analysis_type: conflictType,
+        total_conflicts: conflicts.length,
+        conflicts,
+        overall_risk: conflicts.some((c) => c.severity === 'high') ? 'high' : conflicts.length > 0 ? 'medium' : 'low',
+        message: conflicts.length > 0
+          ? `Found ${conflicts.length} conflict(s) for journey "${journeyName}". Review recommendations before activating.`
+          : `No conflicts detected for journey "${journeyName}". Safe to activate.`,
+        source: 'Journey Agent — AJO Conflict Analysis',
+      }, null, 2);
+    }
+
+    /* ─── Product Support Agent ─── */
+
+    case 'create_support_ticket': {
+      const caseId = `E-${Math.floor(10000 + Math.random() * 90000)}`;
+      return JSON.stringify({
+        status: 'created',
+        case_id: caseId,
+        subject: input.subject,
+        product: input.product || 'Experience Cloud',
+        priority: input.priority || 'P3',
+        tracking_url: `https://experienceleague.adobe.com/home#/support/tickets/${caseId}`,
+        assigned_team: input.product === 'AEM' ? 'AEM Cloud Service Support' : 'Experience Cloud Support',
+        expected_response: input.priority === 'P1' ? '1 hour' : input.priority === 'P2' ? '4 hours' : '24 hours',
+        message: `Support ticket ${caseId} created: "${input.subject}". Expected response within ${input.priority === 'P1' ? '1 hour' : input.priority === 'P2' ? '4 hours' : '24 hours'}.`,
+        source: 'Product Support Agent',
+      }, null, 2);
+    }
+
+    case 'get_ticket_status': {
+      const caseId = input.case_id || 'E-00000';
+      return JSON.stringify({
+        case_id: caseId,
+        status: 'in_progress',
+        subject: 'Content Fragment API returning 500 errors',
+        product: 'AEM',
+        priority: 'P2',
+        created: new Date(Date.now() - 2 * 86400000).toISOString(),
+        last_updated: new Date(Date.now() - 3600000).toISOString(),
+        assigned_to: 'AEM Cloud Service Support',
+        updates: [
+          {
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+            author: 'Adobe Support Engineer',
+            message: 'We have identified the root cause as a misconfigured Content Fragment Model. A fix has been deployed to stage. Please verify on your stage environment.',
+          },
+          {
+            timestamp: new Date(Date.now() - 2 * 86400000).toISOString(),
+            author: 'System',
+            message: `Case ${caseId} created and assigned to AEM Cloud Service Support team.`,
+          },
+        ],
+        tracking_url: `https://experienceleague.adobe.com/home#/support/tickets/${caseId}`,
+        message: `Case ${caseId} is in progress. Last update: fix deployed to stage, awaiting verification.`,
+        source: 'Product Support Agent',
+      }, null, 2);
+    }
+
     default:
       return JSON.stringify({ error: `Unknown tool: ${name}` });
   }
@@ -1712,16 +1902,19 @@ const AEM_SYSTEM_PROMPT = `You are the **Experience Workspace AI** — an expert
 You are the AI brain behind AEM's agentic content supply chain. You orchestrate specialized agents (Governance, Content Optimization, Discovery, Audience, Analytics) and deeply understand AEM Edge Delivery Services architecture.
 
 ## Your MCP Tools — Adobe AI Agent Toolbelt
-You have 31 tools spanning 12 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
+You have 34 tools spanning 14 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
 
 ### AEM Content MCP (content read/write)
 - **get_aem_sites** — Discover all AEM Edge Delivery sites. Call first when users mention any site.
 - **get_aem_site_pages** — Get pages for a site (paths, titles, descriptions).
-- **get_page_content** — Fetch actual HTML content from a page via .plain.html endpoint.
-- **copy_aem_page** — Copy a page as a template to create a new page.
-- **patch_aem_page_content** — Update specific content on an AEM page (hero, headline, CTA, metadata).
-- **create_aem_launch** — Create a Launch (review branch) as a governance gate before publishing.
+- **get_page_content** — Fetch actual HTML content from a page via .plain.html endpoint. Returns content with an ETag for safe patching.
+- **copy_aem_page** — Copy a page as a template to create a new page. Returns ETag and edit URLs (Universal Editor + DA).
+- **patch_aem_page_content** — Update specific content on an AEM page. ALWAYS pass the etag from get_page_content or copy_aem_page to avoid conflicts. Returns edit URLs (UE + DA).
+- **create_aem_launch** — Create a Launch (review branch) as a governance gate before publishing. Returns UE edit URL.
 - **promote_aem_launch** — Promote a Launch to publish live (only after governance approval).
+
+**ETag Pattern**: copy_aem_page returns an ETag → use it in patch_aem_page_content. If you get a conflict, call get_page_content for a fresh ETag and retry.
+**Edit URLs**: After creating or patching pages, share the Universal Editor and DA links so users can open and edit visually.
 
 ### Discovery Agent (DAM search & collections)
 - **search_dam_assets** — Natural language search across AEM Assets (DAM). Supports filters: date_range (e.g., "last 30 days"), tags (array), folder path, exclude terms. Returns approved assets with Dynamic Media delivery URLs.
@@ -1746,6 +1939,7 @@ You have 31 tools spanning 12 Adobe AI Agents. USE THEM when relevant — the AI
 
 ### Journey Agent (AJO)
 - **get_journey_status** — List, create, or check status of AJO journeys.
+- **analyze_journey_conflicts** — Analyze a journey for scheduling conflicts, audience overlaps, and resource contention with other live journeys.
 
 ### Workfront WOA (workflow)
 - **create_workfront_task** — Create review/approval tasks in Workfront. Assigns to approval chain from customer profile.
@@ -1770,6 +1964,10 @@ You have 31 tools spanning 12 Adobe AI Agents. USE THEM when relevant — the AI
 - **get_pipeline_status** — Get deployment pipeline status, build history, and environment health. Supports status_filter (e.g., 'failed') and program_name filter.
 - **analyze_pipeline_failure** — Analyze a failed pipeline execution. Returns root cause, affected step, error logs, and suggested fix.
 
+### Product Support Agent (tickets & troubleshooting)
+- **create_support_ticket** — Create a support ticket with Adobe Experience Cloud support. Returns case ID and tracking URL.
+- **get_ticket_status** — Get status and updates on an existing support ticket/case by case ID.
+
 ### Acrobat MCP (PDF Services)
 - **extract_pdf_content** — Extract structured content from a PDF document (text, tables, images, metadata).
 
@@ -1788,8 +1986,11 @@ You have 31 tools spanning 12 Adobe AI Agents. USE THEM when relevant — the AI
 12. For content translation, call translate_page. For form creation, call create_form. For content modernization, call modernize_content.
 13. For asset rights/DRM/expiry checks, call check_asset_expiry. For content quality audits, call audit_content.
 14. For adding assets to collections, call add_to_collection.
+15. For journey conflict analysis (scheduling, audience overlap), call analyze_journey_conflicts.
+16. For support tickets, call create_support_ticket to create and get_ticket_status to check updates.
+17. IMPORTANT: After creating or patching pages, ALWAYS share the Universal Editor and DA edit links in your response so the user can open and edit the page visually.
 
-## Capabilities — 31 Tools, 12 Agents, Full Adobe Stack
+## Capabilities — 34 Tools, 14 Agents, Full Adobe Stack
 - **Page Analysis**: Analyze EDS pages — structure, blocks, sections, metadata, performance
 - **Governance Compliance**: Brand guidelines, brand compliance, legal, WCAG 2.1 AA accessibility, SEO, DRM, asset expiry
 - **Content Audit**: Deep content quality audit — readability, tone, inclusivity, freshness, rewrite suggestions
@@ -1805,6 +2006,8 @@ You have 31 tools spanning 12 Adobe AI Agents. USE THEM when relevant — the AI
 - **A/B Testing & Personalization**: Target activities, traffic splits, decisioned offers per segment
 - **Generative AI**: Firefly image variations from prompts with DAM integration
 - **DevOps**: Cloud Manager pipeline status, deployment history, failure analysis, environment health
+- **Journey Conflict Analysis**: Scheduling conflicts, audience overlaps, resource contention detection
+- **Product Support**: Ticket creation, case tracking, troubleshooting guidance
 - **Document Processing**: PDF extraction via Acrobat MCP (text, tables, images, metadata)
 - **AEM Architecture**: Deep knowledge of EDS blocks, section metadata, content modeling, three-phase loading
 

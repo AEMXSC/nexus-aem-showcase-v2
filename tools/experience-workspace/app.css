@@ -538,6 +538,17 @@ html, body {
   border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
 }
 
+/* Chat Links */
+.message a {
+  color: var(--accent-light);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message a:hover {
+  color: var(--accent);
+}
+
 /* Agent Badge */
 .message .agent-badge {
   display: inline-flex;
@@ -1254,7 +1265,7 @@ html, body {
   color: var(--red);
 }
 
-/* ─── Orchestration Steps ─── */
+/* ─── Orchestration Steps (legacy) ─── */
 .orchestration-step {
   display: flex;
   align-items: center;
@@ -1303,6 +1314,158 @@ html, body {
 
 .step-label {
   color: var(--text-muted);
+}
+
+/* ─── Collapsible Tool Groups (Claude.ai style) ─── */
+.tool-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 6px 0;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.tool-group:hover {
+  border-color: var(--accent-dim);
+}
+
+.tool-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg-secondary);
+  transition: background 0.2s;
+}
+
+.tool-group-header:hover {
+  background: color-mix(in srgb, var(--bg-secondary) 80%, var(--accent) 20%);
+}
+
+.tool-group-indicator {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tool-group-indicator .gen-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.tool-group-indicator .gen-dot.active {
+  background: var(--accent);
+  animation: pulse 1.5s infinite;
+}
+
+.tool-group-indicator .gen-dot.done {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.4);
+}
+
+.tool-group-agent {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-light);
+  flex: 1;
+}
+
+.tool-group-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tool-group-chevron {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.tool-group.collapsed .tool-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.tool-group-body {
+  max-height: 500px;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+  opacity: 1;
+}
+
+.tool-group.collapsed .tool-group-body {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Individual tool call rows */
+.tool-call-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 28px;
+  font-size: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  animation: fadeIn 0.2s ease;
+}
+
+.tool-call-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.tool-call-row.active .tool-call-dot {
+  background: var(--accent);
+  animation: pulse 1.5s infinite;
+}
+
+.tool-call-row.done .tool-call-dot {
+  background: var(--green);
+}
+
+.tool-call-name {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.tool-call-args {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-call-status {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.tool-call-row.active .tool-call-status {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.tool-call-row.done .tool-call-status {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 15%, transparent);
 }
 
 /* ─── Org Selector ─── */
