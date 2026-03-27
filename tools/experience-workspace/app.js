@@ -31,10 +31,26 @@ const authStatus = document.getElementById('authStatus');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 
+/* ── View & Panel DOM refs ── */
+const viewHome = document.getElementById('viewHome');
+const viewEditor = document.getElementById('viewEditor');
+const editorToolbar = document.getElementById('editorToolbar');
+const panels = document.getElementById('panels');
+const resourcesTree = document.getElementById('resourcesTree');
+const breadcrumbPage = document.getElementById('breadcrumbPage');
+const previewUrlText = document.getElementById('previewUrlText');
+const previewDot = document.getElementById('previewDot');
+const homeSiteName = document.getElementById('homeSiteName');
+const homeSiteUrl = document.getElementById('homeSiteUrl');
+const homePromptInput = document.getElementById('homePromptInput');
+
 /* ── State ── */
 let conversationHistory = [];
 let isLiveMode = false;
 let pendingFile = null; // { name, type, size, content (text or base64), mediaType }
+let currentView = 'home'; // 'home' | 'editor'
+let sitePages = []; // loaded from query-index.json
+let activeResourcePath = null;
 
 /* ── Utility ── */
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -1375,9 +1391,159 @@ async function runPersonalizeFlow() {
   await handleRealChat('Analyze this page and suggest personalization strategies. Identify content sections that could be personalized, recommend audience segments, and estimate potential impact. Reference AEP and Target MCP capabilities.');
 }
 
+/* ══════════════════════════════════════════════════════════════
+   VIEW SWITCHING (Home ↔ Editor)
+   ══════════════════════════════════════════════════════════════ */
+
+function switchView(view) {
+  currentView = view;
+  if (view === 'home') {
+    viewHome.style.display = '';
+    viewEditor.style.display = 'none';
+    if (editorToolbar) editorToolbar.style.display = 'none';
+  } else {
+    viewHome.style.display = 'none';
+    viewEditor.style.display = '';
+    if (editorToolbar) editorToolbar.style.display = '';
+  }
+  // Update sidebar active state
+  document.querySelectorAll('.sidebar-btn[data-panel]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.panel === (view === 'home' ? 'home' : 'content'));
+  });
+}
+
+/* ── Layout Toggle (chat-only | chat-preview | full) ── */
+function setLayout(layout) {
+  if (!panels) return;
+  panels.dataset.layout = layout;
+  document.querySelectorAll('.layout-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.layout === layout);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESOURCES PANEL — Load site pages from query-index.json
+   ══════════════════════════════════════════════════════════════ */
+
+async function loadResources() {
+  if (!resourcesTree) return;
+  resourcesTree.innerHTML = '<div class="resources-loading">Loading pages...</div>';
+  sitePages = [];
+
+  const origin = AEM_ORG.previewOrigin;
+  // Try query-index.json first
+  try {
+    const resp = await fetch(`${origin}/query-index.json`);
+    if (resp.ok) {
+      const data = await resp.json();
+      const entries = data.data || data;
+      if (Array.isArray(entries) && entries.length > 0) {
+        sitePages = entries.map((e) => ({
+          path: e.path,
+          title: e.title || e.path.split('/').pop() || 'index',
+          description: e.description || '',
+          lastModified: e.lastModified || '',
+          image: e.image || '',
+        }));
+      }
+    }
+  } catch { /* ignore */ }
+
+  // Fallback: try sitemap
+  if (sitePages.length === 0) {
+    try {
+      const resp = await fetch(`${origin}/sitemap.xml`);
+      if (resp.ok) {
+        const text = await resp.text();
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(text, 'text/xml');
+        const locs = xml.querySelectorAll('url > loc');
+        locs.forEach((loc) => {
+          const url = loc.textContent;
+          const path = new URL(url).pathname;
+          sitePages.push({
+            path,
+            title: path.split('/').filter(Boolean).pop() || 'index',
+            description: '',
+          });
+        });
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Fallback: at least show the homepage
+  if (sitePages.length === 0) {
+    sitePages = [{ path: '/', title: 'index', description: 'Homepage' }];
+  }
+
+  renderResources();
+}
+
+function renderResources() {
+  if (!resourcesTree) return;
+  if (sitePages.length === 0) {
+    resourcesTree.innerHTML = '<div class="resources-empty">No pages found</div>';
+    return;
+  }
+
+  resourcesTree.innerHTML = '';
+  sitePages.forEach((page) => {
+    const item = document.createElement('div');
+    item.classList.add('resource-item');
+    if (page.path === activeResourcePath) item.classList.add('active');
+    item.dataset.path = page.path;
+
+    const ext = page.path.endsWith('.json') ? 'json' : page.path.endsWith('.svg') ? 'svg' : 'page';
+    const iconSvg = ext === 'page'
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h5v5H7z"/></svg>';
+
+    item.innerHTML = `
+      <span class="resource-icon">${iconSvg}</span>
+      <span class="resource-name">${page.title}</span>
+    `;
+
+    item.addEventListener('click', () => navigateToPage(page.path));
+    resourcesTree.appendChild(item);
+  });
+}
+
+/* ── Navigate preview iframe to a page ── */
+function navigateToPage(path) {
+  activeResourcePath = path;
+  const url = AEM_ORG.previewOrigin + path;
+  if (previewFrame) previewFrame.src = url;
+  if (previewUrlText) previewUrlText.textContent = url.replace(/^https?:\/\//, '');
+  if (previewDot) previewDot.classList.add('connected');
+  if (breadcrumbPage) breadcrumbPage.textContent = path.split('/').filter(Boolean).pop() || 'index';
+
+  // Update active state in resources tree
+  document.querySelectorAll('.resource-item').forEach((el) => {
+    el.classList.toggle('active', el.dataset.path === path);
+  });
+
+  // Cache clear for fresh context
+  cachedPageHTML = null;
+  cachedPageUrl = null;
+}
+
+/* ── Connect site: load preview + resources ── */
+function connectSite() {
+  const origin = AEM_ORG.previewOrigin;
+  // Update home badge
+  if (homeSiteName) homeSiteName.textContent = AEM_ORG.name;
+  if (homeSiteUrl) homeSiteUrl.textContent = origin.replace(/^https?:\/\//, '');
+
+  // Load preview iframe with homepage
+  navigateToPage('/');
+
+  // Load resources tree
+  loadResources();
+}
+
 /* ── Preview (hidden iframe for page context) ── */
 function loadPreview() {
-  previewFrame.src = PREVIEW_URL;
+  navigateToPage(activeResourcePath || '/');
 }
 
 /* ── Flow Router ── */
@@ -1404,6 +1570,10 @@ const FLOWS = {
   services: runServicesPanel,
   blocks: runBlockLibrary,
   orchestrate: () => { if (!ai.hasApiKey()) { requireApiKey(); return; } runOrchestration(); },
+  content: () => {
+    switchView('editor');
+    addMessage('assistant', md('Ready to create content. Tell me what you\'d like to build — new pages, blocks, or copy for your site.'));
+  },
 };
 
 /* ── User Input ── */
@@ -1499,8 +1669,10 @@ function handleUserInput() {
 /* ── Event Listeners ── */
 document.querySelectorAll('.prompt-chip').forEach((btn) => {
   btn.addEventListener('click', () => {
+    // If we're on the home view, switch to editor first
+    if (currentView === 'home') switchView('editor');
     const fn = FLOWS[btn.dataset.flow];
-    if (fn) fn();
+    if (fn) setTimeout(() => fn(), currentView === 'home' ? 300 : 0);
   });
 });
 
@@ -1583,22 +1755,74 @@ if (railSettingsBtn) {
   railSettingsBtn.addEventListener('click', toggleSettings);
 }
 
-// Sidebar panel switching
+// Sidebar panel switching (Home / Content / Code)
 document.querySelectorAll('.sidebar-btn[data-panel]').forEach((btn) => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.sidebar-btn[data-panel]').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-
     const panel = btn.dataset.panel;
-    if (panel === 'governance') {
-      runGovernance();
-    } else if (panel === 'analytics') {
-      runPerformanceFlow();
-    } else if (panel === 'workfront') {
-      runWorkfrontPanel();
+    if (panel === 'home') {
+      switchView('home');
+    } else if (panel === 'content' || panel === 'code') {
+      switchView('editor');
     }
   });
 });
+
+// Layout toggle buttons
+document.querySelectorAll('.layout-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    setLayout(btn.dataset.layout);
+  });
+});
+
+// Home card click → switch to editor + trigger flow
+document.querySelectorAll('.home-card').forEach((card) => {
+  card.addEventListener('click', () => {
+    const flow = card.dataset.flow;
+    switchView('editor');
+    const fn = FLOWS[flow];
+    if (fn) setTimeout(() => fn(), 300);
+  });
+});
+
+// Home prompt bar → switch to editor + send message
+if (homePromptInput) {
+  const homePromptSend = document.getElementById('homePromptSend');
+  const sendHomePrompt = () => {
+    const text = homePromptInput.value.trim();
+    if (!text) return;
+    switchView('editor');
+    chatInput.value = text;
+    homePromptInput.value = '';
+    setTimeout(() => handleUserInput(), 300);
+  };
+  homePromptInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendHomePrompt(); }
+  });
+  if (homePromptSend) homePromptSend.addEventListener('click', sendHomePrompt);
+}
+
+// Breadcrumb "Home" click → return to home view
+const breadcrumbHome = document.querySelector('.breadcrumb-item[data-nav="home"]');
+if (breadcrumbHome) {
+  breadcrumbHome.addEventListener('click', () => switchView('home'));
+}
+
+// Preview toolbar buttons
+const refreshPreviewBtn = document.getElementById('refreshPreviewBtn');
+if (refreshPreviewBtn) {
+  refreshPreviewBtn.addEventListener('click', () => {
+    if (previewFrame) previewFrame.src = previewFrame.src;
+  });
+}
+
+const editInUEBtn = document.getElementById('editInUEBtn');
+if (editInUEBtn) {
+  editInUEBtn.addEventListener('click', () => {
+    const path = activeResourcePath || '/';
+    const ueUrl = `https://experience.adobe.com/#/@${AEM_ORG.orgId}/aem/editor/canvas/${AEM_ORG.previewOrigin}${path}`;
+    window.open(ueUrl, '_blank');
+  });
+}
 
 /* ── Profile Switching ── */
 function switchProfile(profileId) {
@@ -1620,16 +1844,19 @@ function switchProfile(profileId) {
     opt.classList.toggle('active', opt.dataset.profile === profileId);
   });
 
-  // Reload preview
-  loadPreview();
+  // Reconnect site: reload preview + resources + home badge
+  activeResourcePath = null;
+  connectSite();
   cachedPageHTML = null;
   cachedPageUrl = null;
 
   // Clear conversation
   conversationHistory = [];
 
-  // Notify user
-  addMessage('assistant', md(`**Switched to ${AEM_ORG.name}**\nCustomer-specific system prompt loaded. Brand voice, segments, approval chains, and legal rules are now active for ${AEM_ORG.name}.`));
+  // Notify user (only in editor view)
+  if (currentView === 'editor') {
+    addMessage('assistant', md(`**Switched to ${AEM_ORG.name}**\nCustomer-specific system prompt loaded. Brand voice, segments, approval chains, and legal rules are now active for ${AEM_ORG.name}.`));
+  }
 
   updateAuthUI();
 }
@@ -1925,8 +2152,11 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  // Load hidden preview frame for page context
-  loadPreview();
+  // Set initial view to home
+  switchView('home');
+
+  // Connect site: load preview + resources + home badge
+  connectSite();
 
   // Initialize IMS
   try {
