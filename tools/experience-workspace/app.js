@@ -9,9 +9,9 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=14';
-import * as ai from './ai.js?v=14';
-import { TOOL_AGENT_MAP } from './ai.js?v=14';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=15';
+import * as ai from './ai.js?v=15';
+import { TOOL_AGENT_MAP } from './ai.js?v=15';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
@@ -2828,7 +2828,9 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  // Initialize IMS — force sign-in on load so the redirect happens before any chat state exists
+  console.log('[EW] init v15 — no auto sign-in, no redirect');
+
+  // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {
     await loadIms();
   } catch (err) {
@@ -2837,9 +2839,8 @@ async function init() {
 
   updateAuthUI();
 
-  // Don't auto-trigger sign-in — browsers block popups without a user gesture.
-  // Instead, let the user click "Sign In" which triggers the popup flow properly.
-  // The UI loads normally; auth-gated features prompt for sign-in as needed.
+  // NO auto sign-in. User clicks "Sign In" button when ready.
+  // This prevents any redirect to da.live.
 
   // Auto-connect default site and go straight to editor
   // XSC team members sign in → land directly in the editor with the team site loaded

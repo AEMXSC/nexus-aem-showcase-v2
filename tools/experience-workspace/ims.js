@@ -3,9 +3,11 @@
  * Uses Adobe IMS (same pattern as da.live / AEM Coder)
  * Client ID: darkalley
  *
- * Sign-in uses a POPUP window because the darkalley client only has
- * da.live registered as a redirect URI. The popup lands on da.live
- * after auth; when the user closes it, we reload to pick up the session.
+ * IMPORTANT: The darkalley client only has da.live as a registered redirect URI.
+ * Any redirect-based sign-in will land on da.live, not Experience Workspace.
+ * Sign-in uses a POPUP window to keep the main window intact.
+ * The IMS library is loaded with autoValidateToken OFF to prevent any
+ * automatic redirects during initialization.
  */
 
 const IMS_CLIENT_ID = 'darkalley';
@@ -29,12 +31,17 @@ function loadScript(src) {
 }
 
 export function getToken() {
-  // First check our manual token storage (from hash relay)
+  // Check our manual token storage first (from popup relay)
   const manual = localStorage.getItem('ew-ims-token');
   if (manual) return manual;
+  // Then check the IMS library
   if (!window.adobeIMS) return null;
-  const t = window.adobeIMS.getAccessToken();
-  return t?.token || null;
+  try {
+    const t = window.adobeIMS.getAccessToken();
+    return t?.token || null;
+  } catch {
+    return null;
+  }
 }
 
 export function getProfile() {
@@ -47,7 +54,6 @@ export function isSignedIn() {
 
 export function signIn() {
   localStorage.setItem('ew-ims', 'true');
-  if (!window.adobeIMS) return;
 
   // Build IMS authorize URL manually.
   // redirect_uri MUST be da.live — it's the only URI registered for darkalley.
@@ -73,7 +79,6 @@ export function signIn() {
 
   if (!popup) {
     // Popup blocked — do NOT fall back to redirect (that sends users to da.live).
-    // Show a helpful alert instead.
     // eslint-disable-next-line no-alert
     alert('Pop-up blocked — please allow pop-ups for this site, then click Sign In again.');
     return;
@@ -84,7 +89,6 @@ export function signIn() {
     // Try to detect if popup landed on da.live with a token hash
     try {
       const popupUrl = popup.location.href;
-      // If we can read it, the popup is still on our origin (shouldn't happen)
       if (popupUrl && popupUrl.includes('access_token=')) {
         const hash = new URL(popupUrl).hash;
         const tokenParams = new URLSearchParams(hash.slice(1));
@@ -114,7 +118,7 @@ export function signOut() {
   localStorage.removeItem('ew-ims-token');
   profile = null;
   if (window.adobeIMS) {
-    window.adobeIMS.signOut();
+    try { window.adobeIMS.signOut(); } catch { /* ignore */ }
   }
 }
 
@@ -122,7 +126,6 @@ export async function loadIms() {
   if (imsReady) return imsReady;
 
   // Check if there's a manually-relayed access_token in the URL hash
-  // (e.g., user copied the da.live callback URL hash onto this page)
   const hash = window.location.hash;
   if (hash.includes('access_token=')) {
     const tokenParams = new URLSearchParams(hash.slice(1));
@@ -130,7 +133,6 @@ export async function loadIms() {
     if (token) {
       localStorage.setItem('ew-ims-token', token);
       localStorage.setItem('ew-ims', 'true');
-      // Clear hash without triggering navigation
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
   }
@@ -138,26 +140,26 @@ export async function loadIms() {
   imsReady = new Promise((resolve) => {
     const timeout = setTimeout(() => {
       console.warn('IMS timeout — continuing without auth');
-      // Even without IMS lib, check for manually-stored token
       const manualToken = localStorage.getItem('ew-ims-token');
-      if (manualToken) {
-        resolve({ accessToken: { token: manualToken }, anonymous: false });
-      } else {
-        resolve({ anonymous: true });
-      }
+      resolve(manualToken ? { anonymous: false } : { anonymous: true });
     }, IMS_TIMEOUT);
 
+    // CRITICAL: autoValidateToken is FALSE to prevent the IMS library
+    // from doing ANY automatic redirects during initialization.
+    // We handle token validation ourselves.
     window.adobeid = {
       client_id: IMS_CLIENT_ID,
       scope: IMS_SCOPE,
       locale: 'en_US',
-      autoValidateToken: true,
+      autoValidateToken: false,
       environment: IMS_ENV,
-      useLocalStorage: true,
-      redirect_uri: `${window.location.origin}${window.location.pathname}`,
+      useLocalStorage: false,
+      redirect_uri: window.location.href,
       onReady: async () => {
         clearTimeout(timeout);
-        const accessToken = window.adobeIMS.getAccessToken();
+        console.log('[IMS] onReady fired');
+        let accessToken = null;
+        try { accessToken = window.adobeIMS.getAccessToken(); } catch { /* ignore */ }
         if (accessToken) {
           localStorage.setItem('ew-ims', 'true');
           try {
@@ -168,13 +170,11 @@ export async function loadIms() {
             resolve({ accessToken, anonymous: false });
           }
         } else {
-          // Check for manually-stored token
           const manualToken = localStorage.getItem('ew-ims-token');
           if (manualToken) {
             localStorage.setItem('ew-ims', 'true');
-            resolve({ accessToken: { token: manualToken }, anonymous: false });
+            resolve({ anonymous: false });
           } else {
-            localStorage.removeItem('ew-ims');
             resolve({ anonymous: true });
           }
         }
@@ -182,25 +182,15 @@ export async function loadIms() {
       onError: (err) => {
         clearTimeout(timeout);
         console.error('IMS error:', err);
-        // Still check for manual token on error
         const manualToken = localStorage.getItem('ew-ims-token');
-        if (manualToken) {
-          resolve({ accessToken: { token: manualToken }, anonymous: false });
-        } else {
-          resolve({ anonymous: true, error: err });
-        }
+        resolve(manualToken ? { anonymous: false } : { anonymous: true, error: err });
       },
     };
 
     loadScript(IMS_LIB_URL).catch(() => {
       clearTimeout(timeout);
-      console.warn('Failed to load IMS library');
-      const manualToken = localStorage.getItem('ew-ims-token');
-      if (manualToken) {
-        resolve({ accessToken: { token: manualToken }, anonymous: false });
-      } else {
-        resolve({ anonymous: true });
-      }
+      console.warn('Failed to load IMS library — continuing without auth');
+      resolve({ anonymous: true });
     });
   });
 
