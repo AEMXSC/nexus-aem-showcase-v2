@@ -9,10 +9,10 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=21';
-import * as ai from './ai.js?v=21';
-import { TOOL_AGENT_MAP } from './ai.js?v=21';
-import * as da from './da-client.js?v=21';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken, relaySignIn, getBookmarkletCode } from './ims.js?v=22';
+import * as ai from './ai.js?v=22';
+import { TOOL_AGENT_MAP } from './ai.js?v=22';
+import * as da from './da-client.js?v=22';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
@@ -312,6 +312,102 @@ if (imsTokenHelp) {
     imsTokenStatus.className = 'settings-token-status';
   });
 }
+
+/* ── Relay Sign-In Modal ── */
+const relayModal = document.getElementById('relayModal');
+const relayModalClose = document.getElementById('relayModalClose');
+const relaySetup = document.getElementById('relaySetup');
+const relayConnect = document.getElementById('relayConnect');
+const relaySuccess = document.getElementById('relaySuccess');
+const relayBookmarklet = document.getElementById('relayBookmarklet');
+const relaySetupDone = document.getElementById('relaySetupDone');
+const relayOpenDA = document.getElementById('relayOpenDA');
+const relayWaiting = document.getElementById('relayWaiting');
+
+// Set bookmarklet href
+if (relayBookmarklet) {
+  relayBookmarklet.href = getBookmarkletCode();
+  // Prevent click from navigating (it's meant to be dragged)
+  relayBookmarklet.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+}
+
+function openRelayModal() {
+  if (!relayModal) return;
+  // Show setup step if bookmarklet hasn't been used before, else skip to connect
+  const hasSetup = localStorage.getItem('ew-relay-setup');
+  if (relaySetup) relaySetup.style.display = hasSetup ? 'none' : '';
+  if (relayConnect) relayConnect.style.display = hasSetup ? '' : 'none';
+  if (relaySuccess) relaySuccess.style.display = 'none';
+  if (relayWaiting) relayWaiting.style.display = 'none';
+  relayModal.classList.add('visible');
+}
+
+function closeRelayModal() {
+  if (relayModal) relayModal.classList.remove('visible');
+}
+
+if (relayModalClose) {
+  relayModalClose.addEventListener('click', closeRelayModal);
+}
+if (relayModal) {
+  relayModal.addEventListener('click', (e) => {
+    if (e.target === relayModal) closeRelayModal();
+  });
+}
+
+// "I've added it" → skip to connect step
+if (relaySetupDone) {
+  relaySetupDone.addEventListener('click', () => {
+    localStorage.setItem('ew-relay-setup', 'true');
+    if (relaySetup) relaySetup.style.display = 'none';
+    if (relayConnect) relayConnect.style.display = '';
+  });
+}
+
+// "Open da.live" → open popup and wait for relay
+if (relayOpenDA) {
+  relayOpenDA.addEventListener('click', async () => {
+    if (relayWaiting) relayWaiting.style.display = 'flex';
+    try {
+      const token = await relaySignIn();
+      if (token) {
+        // Show success
+        if (relayConnect) relayConnect.style.display = 'none';
+        if (relaySuccess) relaySuccess.style.display = '';
+        updateAuthUI();
+        da.resetMcpState?.();
+        // Auto-close after 1.5s
+        setTimeout(closeRelayModal, 1500);
+      }
+    } catch (err) {
+      if (err.message === 'popup-blocked') {
+        // eslint-disable-next-line no-alert
+        alert('Pop-up blocked — please allow pop-ups for this site.');
+      } else if (err.message === 'popup-closed') {
+        // User closed popup without relaying — check if token arrived via paste
+        if (isSignedIn()) {
+          if (relayConnect) relayConnect.style.display = 'none';
+          if (relaySuccess) relaySuccess.style.display = '';
+          updateAuthUI();
+          setTimeout(closeRelayModal, 1500);
+        } else {
+          if (relayWaiting) relayWaiting.style.display = 'none';
+        }
+      }
+    }
+  });
+}
+
+// Listen for auth changes (from relay postMessage)
+window.addEventListener('ew-auth-change', (e) => {
+  updateAuthUI();
+  if (e.detail?.signedIn) {
+    da.resetMcpState?.();
+  }
+});
 
 /* ── Brand Governance Admin ── */
 const BRAND_STORAGE_KEY = 'ew-brand-policies';
@@ -2695,8 +2791,12 @@ if (attachBtn) {
 
 if (authBtn) {
   authBtn.addEventListener('click', () => {
-    if (isSignedIn()) signOut();
-    else signIn();
+    if (isSignedIn()) {
+      signOut();
+      updateAuthUI();
+    } else {
+      openRelayModal();
+    }
   });
 }
 
@@ -3242,7 +3342,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v21 — IMS token paste for DA editing');
+  console.log('[EW] init v22 — relay sign-in (bookmarklet + postMessage)');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {

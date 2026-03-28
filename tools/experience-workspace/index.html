@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Experience Workspace</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e34850'><path d='M12 2L2 7l10 5 10-5-10-5z'/><path d='M2 17l10 5 10-5'/><path d='M2 12l10 5 10-5'/></svg>">
-  <link rel="stylesheet" href="app.css?v=21">
+  <link rel="stylesheet" href="app.css?v=22">
 </head>
 <body>
   <div class="workspace">
@@ -147,6 +147,58 @@
         <div class="settings-actions">
           <button class="settings-save" onclick="document.getElementById('settingsPanel').classList.remove('visible'); const k=document.getElementById('claudeKeyInput'); if(k.value && !k.value.endsWith('...')) localStorage.setItem('ew-claude-key',k.value.trim()); location.reload();">Save</button>
           <button class="settings-cancel" onclick="document.getElementById('settingsPanel').classList.remove('visible')">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Sign-In Relay Modal -->
+      <div id="relayModal" class="relay-modal">
+        <div class="relay-modal-content">
+          <div class="relay-modal-header">
+            <span class="relay-modal-title">Sign In with Adobe</span>
+            <button id="relayModalClose" class="relay-modal-close">&times;</button>
+          </div>
+
+          <!-- Step 1: Setup bookmarklet (shown first time only) -->
+          <div id="relaySetup" class="relay-step">
+            <div class="relay-step-num">One-time setup</div>
+            <p class="relay-step-desc">Drag this button to your bookmarks bar:</p>
+            <div class="relay-bookmarklet-wrap">
+              <a id="relayBookmarklet" class="relay-bookmarklet" href="#">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                Send to EW
+              </a>
+            </div>
+            <p class="relay-hint">Drag it up to your bookmark/favorites bar. You only need to do this once.</p>
+            <button id="relaySetupDone" class="relay-next-btn">I've added it &rarr;</button>
+          </div>
+
+          <!-- Step 2: Open da.live + relay -->
+          <div id="relayConnect" class="relay-step" style="display:none">
+            <div class="relay-instructions">
+              <div class="relay-instruction">
+                <span class="relay-num">1</span>
+                <span>Click below to open <strong>da.live</strong> &mdash; sign in if needed</span>
+              </div>
+              <div class="relay-instruction">
+                <span class="relay-num">2</span>
+                <span>Once signed in, click your <strong>"Send to EW"</strong> bookmark</span>
+              </div>
+            </div>
+            <button id="relayOpenDA" class="relay-open-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Open da.live
+            </button>
+            <div class="relay-waiting" id="relayWaiting" style="display:none">
+              <div class="relay-spinner"></div>
+              <span>Waiting for token&hellip;</span>
+            </div>
+          </div>
+
+          <!-- Step 3: Success -->
+          <div id="relaySuccess" class="relay-step" style="display:none">
+            <div class="relay-success-icon">&#10003;</div>
+            <div class="relay-success-text">Signed in! DA editing enabled.</div>
+          </div>
         </div>
       </div>
 
@@ -392,6 +444,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
-  <script src="app.js?v=21" type="module"></script>
+  <script src="app.js?v=22" type="module"></script>
 </body>
 </html>
