@@ -144,16 +144,16 @@ export async function loadIms() {
       resolve(manualToken ? { anonymous: false } : { anonymous: true });
     }, IMS_TIMEOUT);
 
-    // CRITICAL: autoValidateToken is FALSE to prevent the IMS library
-    // from doing ANY automatic redirects during initialization.
-    // We handle token validation ourselves.
+    // autoValidateToken lets the IMS library detect existing sessions.
+    // This does NOT cause redirects — only our signIn() call does that,
+    // and that's only triggered by the user clicking Sign In.
     window.adobeid = {
       client_id: IMS_CLIENT_ID,
       scope: IMS_SCOPE,
       locale: 'en_US',
-      autoValidateToken: false,
+      autoValidateToken: true,
       environment: IMS_ENV,
-      useLocalStorage: false,
+      useLocalStorage: true,
       redirect_uri: window.location.href,
       onReady: async () => {
         clearTimeout(timeout);

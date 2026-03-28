@@ -1095,17 +1095,8 @@ async function executeTool(name, input) {
       const daUrl = `https://da.live/edit#/${org}/${repo}${pagePath}`;
       const triggerPreview = input.trigger_preview !== false;
 
-      // Check if user is signed in (DA requires IMS auth)
-      if (!isSignedIn()) {
-        return JSON.stringify({
-          status: 'auth_required',
-          error: 'Adobe sign-in required for DA editing. Click "Sign In" to authenticate with Adobe IMS.',
-          page_path: pagePath,
-        }, null, 2);
-      }
-
       try {
-        // Write content to DA via admin.da.live
+        // Write content to DA via admin.da.live (auth handled by DA client)
         await da.updatePage(htmlPath, input.html);
 
         let previewStatus = 'skipped';
@@ -1153,13 +1144,6 @@ async function executeTool(name, input) {
       const branch = da.getBranch();
       const previewUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page${pagePath}`;
 
-      if (!isSignedIn()) {
-        return JSON.stringify({
-          status: 'auth_required',
-          error: 'Adobe sign-in required. Click "Sign In" to authenticate.',
-        }, null, 2);
-      }
-
       try {
         const resp = await da.previewPage(pagePath);
         return JSON.stringify({
@@ -1190,13 +1174,6 @@ async function executeTool(name, input) {
       const branch = da.getBranch();
       const liveUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.live${pagePath}`;
 
-      if (!isSignedIn()) {
-        return JSON.stringify({
-          status: 'auth_required',
-          error: 'Adobe sign-in required. Click "Sign In" to authenticate.',
-        }, null, 2);
-      }
-
       try {
         const resp = await da.publishPage(pagePath);
         return JSON.stringify({
@@ -1221,13 +1198,6 @@ async function executeTool(name, input) {
     case 'list_site_pages': {
       const listPath = input.path || '/';
 
-      if (!isSignedIn()) {
-        return JSON.stringify({
-          status: 'auth_required',
-          error: 'Adobe sign-in required. Click "Sign In" to authenticate.',
-        }, null, 2);
-      }
-
       try {
         const items = await da.listPages(listPath);
         return JSON.stringify({
@@ -1250,13 +1220,6 @@ async function executeTool(name, input) {
     case 'delete_page': {
       const pagePath = input.page_path.replace(/\.html$/, '');
       const htmlPath = `${pagePath}.html`;
-
-      if (!isSignedIn()) {
-        return JSON.stringify({
-          status: 'auth_required',
-          error: 'Adobe sign-in required. Click "Sign In" to authenticate.',
-        }, null, 2);
-      }
 
       try {
         await da.deletePage(htmlPath);

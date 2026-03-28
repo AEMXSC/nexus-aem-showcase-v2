@@ -9,9 +9,9 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=15';
-import * as ai from './ai.js?v=15';
-import { TOOL_AGENT_MAP } from './ai.js?v=15';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=16';
+import * as ai from './ai.js?v=16';
+import { TOOL_AGENT_MAP } from './ai.js?v=16';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
@@ -2831,7 +2831,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v15 — no auto sign-in, no redirect');
+  console.log('[EW] init v16 — no auth gate, DA tools try-first');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {
