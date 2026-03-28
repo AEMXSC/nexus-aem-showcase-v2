@@ -130,7 +130,7 @@ export async function deletePage(path) {
   return resp;
 }
 
-/* ─── Preview & Publish — always through admin.hlx.page ─── */
+/* ─── Admin API — admin.hlx.page ─── */
 
 export async function previewPage(path) {
   const url = `https://admin.hlx.page/preview/${DA_ORG}/${DA_REPO}/${DA_BRANCH}${path}`;
@@ -142,6 +142,17 @@ export async function publishPage(path) {
   const url = `https://admin.hlx.page/live/${DA_ORG}/${DA_REPO}/${DA_BRANCH}${path}`;
   const resp = await fetchWithToken(url, { method: 'POST' });
   return resp;
+}
+
+/**
+ * Get resource status from admin.hlx.page — NO AUTH REQUIRED.
+ * Returns preview/live status, URLs, last modified, permissions.
+ */
+export async function getStatus(path) {
+  const url = `https://admin.hlx.page/status/${DA_ORG}/${DA_REPO}/${DA_BRANCH}${path}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Status check failed: ${resp.status}`);
+  return resp.json();
 }
 
 /* ─── URL helpers ─── */

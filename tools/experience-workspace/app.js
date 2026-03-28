@@ -9,10 +9,10 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=18';
-import * as ai from './ai.js?v=18';
-import { TOOL_AGENT_MAP } from './ai.js?v=18';
-import * as da from './da-client.js?v=18';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=19';
+import * as ai from './ai.js?v=19';
+import { TOOL_AGENT_MAP } from './ai.js?v=19';
+import * as da from './da-client.js?v=19';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
@@ -1969,11 +1969,37 @@ function renderResources() {
     item.innerHTML = `
       <span class="resource-icon">${iconSvg}</span>
       <span class="resource-name">${page.title}</span>
+      <span class="resource-status" data-path="${page.path}"></span>
     `;
 
     item.addEventListener('click', () => navigateToPage(page.path));
     resourcesTree.appendChild(item);
   });
+
+  // Fetch status badges in background (no auth needed via admin.hlx.page)
+  enrichResourceStatus();
+}
+
+/** Fetch preview/live status for each page via admin.hlx.page (no auth) */
+async function enrichResourceStatus() {
+  for (const page of sitePages) {
+    try {
+      const status = await da.getStatus(page.path);
+      const badge = document.querySelector(`.resource-status[data-path="${page.path}"]`);
+      if (!badge) continue;
+
+      const previewOk = status.preview?.status === 200;
+      const liveOk = status.live?.status === 200;
+
+      if (liveOk) {
+        badge.textContent = 'live';
+        badge.className = 'resource-badge resource-badge-live';
+      } else if (previewOk) {
+        badge.textContent = 'preview';
+        badge.className = 'resource-badge resource-badge-preview';
+      }
+    } catch { /* skip — status check is best-effort */ }
+  }
 }
 
 /* ── Navigate preview iframe to a page ── */
@@ -1996,10 +2022,11 @@ function navigateToPage(path) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   FILE TREE — DA repository browser via MCP / admin.da.live
+   FILE TREE — GitHub API + admin.hlx.page (no auth required)
    ══════════════════════════════════════════════════════════════ */
 
 let fileTreeLoaded = false;
+let fileTreeData = null; // { dirs: Map, files: [] } built from GitHub tree
 let activeResourceTab = 'pages'; // 'pages' | 'files'
 
 /** SVG icons for the file tree */
@@ -2018,131 +2045,209 @@ function getFileIcon(name, isDir) {
   const ext = name.split('.').pop().toLowerCase();
   if (ext === 'html') return FT_ICONS.html;
   if (ext === 'json') return FT_ICONS.json;
-  if (ext === 'js') return FT_ICONS.js;
+  if (ext === 'js' || ext === 'mjs') return FT_ICONS.js;
   if (ext === 'css') return FT_ICONS.css;
   return FT_ICONS.file;
 }
 
-/** Fetch directory listing from DA */
-async function fetchDADirectory(path) {
-  try {
-    const items = await da.listPages(path);
-    if (!Array.isArray(items)) return [];
-    // Sort: folders first, then files, alphabetical
-    return items.sort((a, b) => {
-      const aDir = !a.ext;
-      const bDir = !b.ext;
-      if (aDir !== bDir) return aDir ? -1 : 1;
-      return (a.name || '').localeCompare(b.name || '');
-    });
-  } catch (err) {
-    console.warn('[FileTree] Failed to list', path, err.message);
-    return [];
+/**
+ * Build a nested tree structure from GitHub's flat tree API response.
+ * Returns a Map of path → { name, children: Map, files: [] }
+ */
+function buildTreeFromGitHub(flatItems) {
+  const root = { name: '/', children: new Map(), files: [] };
+
+  // Filter: skip dot-directories at root level (except .sidekick)
+  const skipRoots = new Set(['.agents', '.claude', '.github', '.husky', '.skills', '.migration']);
+
+  for (const item of flatItems) {
+    const parts = item.path.split('/');
+
+    // Skip hidden root dirs
+    if (skipRoots.has(parts[0])) continue;
+
+    if (item.type === 'blob') {
+      // It's a file — place it in the right directory
+      let dir = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!dir.children.has(parts[i])) {
+          dir.children.set(parts[i], { name: parts[i], children: new Map(), files: [] });
+        }
+        dir = dir.children.get(parts[i]);
+      }
+      dir.files.push({ name: parts[parts.length - 1], path: item.path, size: item.size });
+    } else if (item.type === 'tree') {
+      // It's a directory — ensure it exists
+      if (skipRoots.has(parts[0])) continue;
+      let dir = root;
+      for (const part of parts) {
+        if (!dir.children.has(part)) {
+          dir.children.set(part, { name: part, children: new Map(), files: [] });
+        }
+        dir = dir.children.get(part);
+      }
+    }
   }
+
+  return root;
 }
 
-/** Render a single tree node (folder or file) */
-function createTreeNode(item, parentPath, depth) {
-  const isDir = !item.ext;
-  const name = item.name || item.path?.split('/').pop() || '?';
-  const fullPath = `${parentPath === '/' ? '' : parentPath}/${name}${item.ext ? `.${item.ext}` : ''}`;
+/** Render a tree node (recursive) */
+function renderTreeNode(dirNode, depth, parentPath) {
+  const fragment = document.createDocumentFragment();
   const paddingLeft = 10 + depth * 16;
 
-  const node = document.createElement('div');
-  node.className = 'ft-node';
+  // Sort: directories first (alphabetical), then files (alphabetical)
+  const sortedDirs = [...dirNode.children.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const sortedFiles = [...dirNode.files].sort((a, b) => a.name.localeCompare(b.name));
 
-  const row = document.createElement('div');
-  row.className = 'ft-item';
-  row.style.paddingLeft = `${paddingLeft}px`;
+  // Render directories
+  for (const [name, childDir] of sortedDirs) {
+    const node = document.createElement('div');
+    node.className = 'ft-node';
 
-  const chevron = document.createElement('span');
-  chevron.className = `ft-chevron${isDir ? '' : ' hidden'}`;
-  chevron.innerHTML = FT_ICONS.chevron;
+    const row = document.createElement('div');
+    row.className = 'ft-item';
+    row.style.paddingLeft = `${paddingLeft}px`;
 
-  const icon = document.createElement('span');
-  icon.className = `ft-icon ${isDir ? 'folder' : 'file'}`;
-  icon.innerHTML = getFileIcon(name + (item.ext ? `.${item.ext}` : ''), isDir);
+    const chevron = document.createElement('span');
+    chevron.className = 'ft-chevron';
+    chevron.innerHTML = FT_ICONS.chevron;
 
-  const label = document.createElement('span');
-  label.className = 'ft-name';
-  label.textContent = isDir ? name : `${name}${item.ext ? `.${item.ext}` : ''}`;
+    const icon = document.createElement('span');
+    icon.className = 'ft-icon folder';
+    icon.innerHTML = FT_ICONS.folder;
 
-  row.appendChild(chevron);
-  row.appendChild(icon);
-  row.appendChild(label);
-  node.appendChild(row);
+    const label = document.createElement('span');
+    label.className = 'ft-name';
+    label.textContent = name;
 
-  if (isDir) {
+    row.append(chevron, icon, label);
+    node.appendChild(row);
+
     const children = document.createElement('div');
     children.className = 'ft-children';
+    // Pre-render children (all data is already loaded)
+    const childPath = parentPath ? `${parentPath}/${name}` : name;
+    children.appendChild(renderTreeNode(childDir, depth + 1, childPath));
     node.appendChild(children);
 
-    let loaded = false;
-    row.addEventListener('click', async () => {
-      const isOpen = children.classList.contains('open');
-      if (isOpen) {
-        children.classList.remove('open');
-        chevron.classList.remove('open');
-        return;
-      }
-
-      chevron.classList.add('open');
-      children.classList.add('open');
-
-      if (!loaded) {
-        children.innerHTML = '<div class="ft-loading">Loading...</div>';
-        const items = await fetchDADirectory(fullPath);
-        children.innerHTML = '';
-        if (items.length === 0) {
-          children.innerHTML = '<div class="ft-loading">Empty</div>';
-        } else {
-          items.forEach((child) => {
-            children.appendChild(createTreeNode(child, fullPath, depth + 1));
-          });
-        }
-        loaded = true;
-      }
-    });
-  } else {
-    // File click — navigate to it in preview if it's HTML, or open in DA
     row.addEventListener('click', () => {
-      const ext = item.ext?.toLowerCase();
+      const isOpen = children.classList.contains('open');
+      children.classList.toggle('open', !isOpen);
+      chevron.classList.toggle('open', !isOpen);
+    });
+
+    fragment.appendChild(node);
+  }
+
+  // Render files
+  for (const file of sortedFiles) {
+    const filePath = parentPath ? `${parentPath}/${file.name}` : file.name;
+    const node = document.createElement('div');
+    node.className = 'ft-node';
+
+    const row = document.createElement('div');
+    row.className = 'ft-item';
+    row.style.paddingLeft = `${paddingLeft}px`;
+
+    const chevron = document.createElement('span');
+    chevron.className = 'ft-chevron hidden';
+    chevron.innerHTML = FT_ICONS.chevron;
+
+    const icon = document.createElement('span');
+    icon.className = 'ft-icon file';
+    icon.innerHTML = getFileIcon(file.name, false);
+
+    const label = document.createElement('span');
+    label.className = 'ft-name';
+    label.textContent = file.name;
+
+    row.append(chevron, icon, label);
+    node.appendChild(row);
+
+    row.addEventListener('click', () => {
+      const ext = file.name.split('.').pop().toLowerCase();
       if (ext === 'html') {
-        const pagePath = fullPath.replace(/\.html$/, '');
+        // Navigate preview to this page
+        const pagePath = '/' + filePath.replace(/\.html$/, '');
         navigateToPage(pagePath);
+      } else if (ext === 'js' || ext === 'css' || ext === 'json') {
+        // Open on GitHub for code files
+        const ghUrl = `https://github.com/${AEM_ORG.orgId || da.getOrg()}/${AEM_ORG.repo || da.getRepo()}/blob/main/${filePath}`;
+        window.open(ghUrl, '_blank');
       } else {
-        // Open in DA for non-HTML files
-        const daUrl = `https://da.live/edit#/${DA_ORG_REF()}/${DA_REPO_REF()}${fullPath}`;
+        // Open in DA for content files
+        const daUrl = `https://da.live/edit#/${da.getOrg()}/${da.getRepo()}/${filePath}`;
         window.open(daUrl, '_blank');
       }
     });
+
+    fragment.appendChild(node);
   }
 
-  return node;
+  return fragment;
 }
 
-/** Helper refs for current org/repo (avoids circular import issues) */
-function DA_ORG_REF() { return da.getOrg(); }
-function DA_REPO_REF() { return da.getRepo(); }
-
-/** Load the root of the file tree */
+/**
+ * Fetch the full repository tree from GitHub API (no auth needed for public repos).
+ * Falls back to DA listing if GitHub fails.
+ */
 async function loadFileTree() {
   if (!fileTreeEl) return;
   fileTreeEl.innerHTML = '<div class="resources-loading">Loading files...</div>';
 
-  const items = await fetchDADirectory('/');
-  fileTreeEl.innerHTML = '';
+  // Determine GitHub org/repo — prefer profile config, fall back to DA config
+  const ghOrg = AEM_ORG.orgId || da.getOrg();
+  const ghRepo = AEM_ORG.repo || da.getRepo();
 
-  if (items.length === 0) {
-    fileTreeEl.innerHTML = '<div class="resources-empty">No files found. Sign in to browse DA content.</div>';
+  try {
+    const resp = await fetch(`https://api.github.com/repos/${ghOrg}/${ghRepo}/git/trees/main?recursive=1`);
+    if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
+    const data = await resp.json();
+    const items = data.tree || [];
+    console.log(`[FileTree] GitHub tree: ${items.length} items from ${ghOrg}/${ghRepo}`);
+
+    const root = buildTreeFromGitHub(items);
+    fileTreeEl.innerHTML = '';
+    fileTreeEl.appendChild(renderTreeNode(root, 0, ''));
+    fileTreeLoaded = true;
+    fileTreeData = root;
     return;
+  } catch (err) {
+    console.warn('[FileTree] GitHub API failed:', err.message);
   }
 
-  items.forEach((item) => {
-    fileTreeEl.appendChild(createTreeNode(item, '/', 0));
-  });
+  // Fallback: try DA listing (needs auth)
+  try {
+    const items = await da.listPages('/');
+    if (Array.isArray(items) && items.length > 0) {
+      fileTreeEl.innerHTML = '';
+      const sorted = items.sort((a, b) => {
+        const aDir = !a.ext;
+        const bDir = !b.ext;
+        if (aDir !== bDir) return aDir ? -1 : 1;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+      sorted.forEach((item) => {
+        const isDir = !item.ext;
+        const name = item.name || '?';
+        const row = document.createElement('div');
+        row.className = 'ft-item';
+        row.style.paddingLeft = '10px';
+        row.innerHTML = `
+          <span class="ft-chevron${isDir ? '' : ' hidden'}">${FT_ICONS.chevron}</span>
+          <span class="ft-icon ${isDir ? 'folder' : 'file'}">${getFileIcon(name, isDir)}</span>
+          <span class="ft-name">${name}${item.ext ? `.${item.ext}` : ''}</span>
+        `;
+        fileTreeEl.appendChild(row);
+      });
+      fileTreeLoaded = true;
+      return;
+    }
+  } catch { /* ignore */ }
 
-  fileTreeLoaded = true;
+  fileTreeEl.innerHTML = '<div class="resources-empty">Could not load file tree.</div>';
 }
 
 /** Switch between Pages and Files tabs */
@@ -3008,7 +3113,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v18 — file tree + DA MCP');
+  console.log('[EW] init v19 — file tree via GitHub API + admin.hlx.page');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {
