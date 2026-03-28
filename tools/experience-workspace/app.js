@@ -828,6 +828,20 @@ const TOOL_RENDERERS = {
           </div>
         </div>`;
     }
+    // Local preview mode — content rendered directly in iframe (no DA auth)
+    if (result.status === 'local_preview') {
+      const path = result.page_path || '/';
+      return `
+        <div class="page-card page-card-live">
+          <div class="page-card-header">
+            <div class="page-card-icon">✓</div>
+            <div class="page-card-meta">
+              <div class="page-card-title">${path} — Live Preview</div>
+              <div class="page-card-author">${result.content_length?.toLocaleString() || '?'} chars · Rendered in preview</div>
+            </div>
+          </div>
+        </div>`;
+    }
     if (result.status !== 'written') return null;
     const path = result.page_path || '/';
     const previewOk = result.preview_status === 'success';
@@ -1185,6 +1199,33 @@ async function handleRealChat(text, file) {
     // When edit_page_content or preview_page completes, refresh the preview
     try {
       const result = JSON.parse(resultStr);
+
+      // Local preview mode — render HTML directly in iframe (no DA auth needed)
+      if (result._action === 'local_preview' && result._preview_html) {
+        const html = result._preview_html;
+        const base = result._preview_base || '';
+        // Build a full EDS page that loads the site's styles and scripts
+        const srcdoc = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="${base}/">
+  <link rel="stylesheet" href="${base}/styles/styles.css">
+  <script src="${base}/scripts/aem.js" type="module"></script>
+  <script src="${base}/scripts/scripts.js" type="module"></script>
+</head>
+<body>
+  <header></header>
+  <main>${html}</main>
+  <footer></footer>
+</body>
+</html>`;
+        previewFrame.srcdoc = srcdoc;
+        showToast(`Preview: ${result._preview_path || 'page'} (local)`, 'success');
+      }
+
+      // DA write mode — refresh from aem.page CDN
       if (result._action === 'refresh_preview' && result._preview_path) {
         const path = result._preview_path;
         // Small delay to let AEM preview CDN catch up

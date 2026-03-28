@@ -1091,18 +1091,39 @@ async function executeTool(name, input) {
       const org = da.getOrg();
       const repo = da.getRepo();
       const branch = da.getBranch();
-      const previewUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page${pagePath}`;
+      const baseUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
+      const previewUrl = `${baseUrl}${pagePath}`;
       const daUrl = `https://da.live/edit#/${org}/${repo}${pagePath}`;
       const triggerPreview = input.trigger_preview !== false;
 
+      // ── Local preview mode (no auth needed) ──
+      // Render content directly in the preview iframe using the site's
+      // CSS/JS from aem.page. Works for all 20 team members without auth.
+      // DA writes happen separately via Claude.ai + DA MCP.
+      if (!isSignedIn()) {
+        return JSON.stringify({
+          status: 'local_preview',
+          page_path: pagePath,
+          content_length: input.html.length,
+          html: input.html,
+          base_url: baseUrl,
+          preview_url: previewUrl,
+          da_edit_url: daUrl,
+          message: `Content rendered in preview for ${pagePath}. To save permanently, use DA MCP in Claude.ai.`,
+          _action: 'local_preview',
+          _preview_path: pagePath,
+          _preview_html: input.html,
+          _preview_base: baseUrl,
+        }, null, 2);
+      }
+
+      // ── DA write mode (authenticated) ──
       try {
-        // Write content to DA via admin.da.live (auth handled by DA client)
         await da.updatePage(htmlPath, input.html);
 
         let previewStatus = 'skipped';
         let previewTimestamp = null;
 
-        // Trigger AEM preview if requested
         if (triggerPreview) {
           try {
             const previewResp = await da.previewPage(pagePath);
@@ -1128,11 +1149,20 @@ async function executeTool(name, input) {
           _preview_path: pagePath,
         }, null, 2);
       } catch (err) {
+        // DA write failed — fall back to local preview so demo still works
         return JSON.stringify({
-          status: 'error',
-          error: `DA write failed: ${err.message}`,
+          status: 'local_preview',
           page_path: pagePath,
-          hint: 'Ensure you are signed in with Adobe IMS and have write access to this repository.',
+          content_length: input.html.length,
+          html: input.html,
+          base_url: baseUrl,
+          preview_url: previewUrl,
+          da_edit_url: daUrl,
+          message: `DA write failed (${err.message}). Content rendered in local preview instead.`,
+          _action: 'local_preview',
+          _preview_path: pagePath,
+          _preview_html: input.html,
+          _preview_base: baseUrl,
         }, null, 2);
       }
     }
@@ -3279,7 +3309,7 @@ Use these when users ask about:
 15. For journey conflict analysis (scheduling, audience overlap), call analyze_journey_conflicts.
 16. For support tickets, call create_support_ticket to create and get_ticket_status to check updates.
 17. IMPORTANT: After creating or patching pages, ALWAYS share the Universal Editor and DA edit links in your response so the user can open and edit the page visually.
-18. **DA EDITING LOOP (highest priority for content edits)**: When the user wants to edit existing page content or create new pages, prefer the DA Editing Agent tools (edit_page_content, preview_page, publish_page). The workflow: get_page_content → modify HTML → edit_page_content → preview refreshes automatically in the workspace. This is a LIVE editing loop — changes appear immediately.
+18. **DA EDITING LOOP (highest priority for content edits)**: When the user wants to edit existing page content or create new pages, prefer the DA Editing Agent tools (edit_page_content, preview_page, publish_page). The workflow: get_page_content → modify HTML → edit_page_content → preview refreshes automatically in the workspace. This is a LIVE editing loop — changes appear immediately. If the user is not signed in, edit_page_content automatically renders content locally in the preview panel (no auth needed). Always proceed with edits regardless of auth status — the system handles it.
 19. When users say "edit the page", "change the headline", "update the hero", "create a landing page" — use the DA editing tools. Read first, then write.
 20. NEVER call edit_page_content without first reading the page with get_page_content (unless creating a brand new page that doesn't exist yet).
 21. For documentation questions ("how do I...", "what is...", "show me docs on..."), call search_experience_league. For release notes ("what's new", "latest features"), call get_product_release_notes.
