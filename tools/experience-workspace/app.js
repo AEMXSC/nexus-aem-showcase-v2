@@ -2408,7 +2408,9 @@ if (connectSiteBtn) {
 const editInDABtn = document.getElementById('editInDABtn');
 if (editInDABtn) {
   editInDABtn.addEventListener('click', () => {
-    const path = activeResourcePath || '/';
+    let path = activeResourcePath || '/';
+    // DA uses /index for the homepage, not /
+    if (path === '/') path = '/index';
     const daUrl = `https://da.live/edit#/${AEM_ORG.orgId}/${AEM_ORG.repo}${path}`;
     window.open(daUrl, '_blank');
   });
