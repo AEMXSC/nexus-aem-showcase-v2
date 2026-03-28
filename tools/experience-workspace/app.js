@@ -2617,10 +2617,12 @@ async function init() {
 
   updateAuthUI();
 
-  // Auto-trigger sign-in if not already authenticated
+  // Auto-trigger sign-in if not already authenticated (production only)
   // This ensures the IMS redirect happens before the user starts chatting,
-  // preventing the "redirect loses my chat" problem
-  if (!isSignedIn()) {
+  // preventing the "redirect loses my chat" problem.
+  // Skip on localhost so local dev/testing works without Adobe IMS.
+  const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (!isSignedIn() && !isLocalhost) {
     signIn();
     return; // page will redirect — no need to continue init
   }
