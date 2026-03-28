@@ -9,9 +9,9 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js';
-import * as ai from './ai.js';
-import { TOOL_AGENT_MAP } from './ai.js';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=14';
+import * as ai from './ai.js?v=14';
+import { TOOL_AGENT_MAP } from './ai.js?v=14';
 import * as da from './da-client.js';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';

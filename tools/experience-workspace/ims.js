@@ -72,8 +72,10 @@ export function signIn() {
   );
 
   if (!popup) {
-    // Popup blocked — fall back to redirect (user will land on da.live)
-    window.adobeIMS.signIn({ redirect_uri: 'https://da.live/' });
+    // Popup blocked — do NOT fall back to redirect (that sends users to da.live).
+    // Show a helpful alert instead.
+    // eslint-disable-next-line no-alert
+    alert('Pop-up blocked — please allow pop-ups for this site, then click Sign In again.');
     return;
   }
 
