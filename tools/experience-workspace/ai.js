@@ -1094,77 +1094,86 @@ async function executeTool(name, input) {
       const baseUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
       const previewUrl = `${baseUrl}${pagePath}`;
       const daUrl = `https://da.live/edit#/${org}/${repo}${pagePath}`;
-      const triggerPreview = input.trigger_preview !== false;
 
-      // ── Local preview mode (no auth needed) ──
-      // Render content directly in the preview iframe using the site's
-      // CSS/JS from aem.page. Works for all 20 team members without auth.
-      // DA writes happen separately via Claude.ai + DA MCP.
-      if (!isSignedIn()) {
-        return JSON.stringify({
-          status: 'local_preview',
-          page_path: pagePath,
-          content_length: input.html.length,
-          html: input.html,
-          base_url: baseUrl,
-          preview_url: previewUrl,
-          da_edit_url: daUrl,
-          message: `Content rendered in preview for ${pagePath}. To save permanently, use DA MCP in Claude.ai.`,
-          _action: 'local_preview',
-          _preview_path: pagePath,
-          _preview_html: input.html,
-          _preview_base: baseUrl,
-        }, null, 2);
+      // ── Local content write (AEMCoder pattern) ──
+      // Write to local content/ folder for persistence (git-pushable),
+      // then show decorated preview via srcdoc with site CSS/JS from aem.page.
+      const CONTENT_API = 'http://localhost:3001';
+      let localWriteOk = false;
+      try {
+        const apiPath = htmlPath.startsWith('/') ? htmlPath.slice(1) : htmlPath;
+        const resp = await fetch(`${CONTENT_API}/api/content/${apiPath}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html: input.html }),
+        });
+        localWriteOk = resp.ok;
+        if (!resp.ok) console.warn('[edit_page_content] Content API:', resp.status);
+      } catch (localErr) {
+        console.warn('[edit_page_content] Local write failed:', localErr.message);
       }
 
-      // ── DA write mode (authenticated) ──
-      try {
-        await da.updatePage(htmlPath, input.html);
-
-        let previewStatus = 'skipped';
-        let previewTimestamp = null;
-
-        if (triggerPreview) {
-          try {
-            const previewResp = await da.previewPage(pagePath);
-            previewStatus = previewResp.ok ? 'success' : `failed (${previewResp.status})`;
-            previewTimestamp = new Date().toISOString();
-          } catch (previewErr) {
-            previewStatus = `failed: ${previewErr.message}`;
-          }
-        }
-
+      // Return with preview HTML — app.js renders via srcdoc with full EDS decoration
+      if (localWriteOk) {
         return JSON.stringify({
           status: 'written',
           page_path: pagePath,
           content_length: input.html.length,
-          da_source: `${da.getBasePath()}${htmlPath}`,
           preview_url: previewUrl,
           da_edit_url: daUrl,
-          preview_triggered: triggerPreview,
-          preview_status: previewStatus,
-          preview_timestamp: previewTimestamp,
-          message: `Page content written to ${pagePath} via DA.${triggerPreview ? ` Preview ${previewStatus === 'success' ? 'refreshed' : 'trigger ' + previewStatus}.` : ''} Open in DA to edit visually.`,
-          _action: 'refresh_preview',
-          _preview_path: pagePath,
-        }, null, 2);
-      } catch (err) {
-        // DA write failed — fall back to local preview so demo still works
-        return JSON.stringify({
-          status: 'local_preview',
-          page_path: pagePath,
-          content_length: input.html.length,
-          html: input.html,
-          base_url: baseUrl,
-          preview_url: previewUrl,
-          da_edit_url: daUrl,
-          message: `DA write failed (${err.message}). Content rendered in local preview instead.`,
-          _action: 'local_preview',
+          message: `Content saved to ${pagePath}. Preview updated.${!isSignedIn() ? ' Push to git to publish live.' : ''}`,
+          _action: 'local_write',
           _preview_path: pagePath,
           _preview_html: input.html,
           _preview_base: baseUrl,
         }, null, 2);
       }
+
+      // ── DA write fallback (if signed in) ──
+      if (isSignedIn()) {
+        try {
+          await da.updatePage(htmlPath, input.html);
+          let previewStatus = 'skipped';
+          if (input.trigger_preview !== false) {
+            try {
+              const previewResp = await da.previewPage(pagePath);
+              previewStatus = previewResp.ok ? 'success' : `failed (${previewResp.status})`;
+            } catch (previewErr) {
+              previewStatus = `failed: ${previewErr.message}`;
+            }
+          }
+          return JSON.stringify({
+            status: 'written',
+            page_path: pagePath,
+            content_length: input.html.length,
+            da_source: `${da.getBasePath()}${htmlPath}`,
+            preview_url: previewUrl,
+            da_edit_url: daUrl,
+            preview_status: previewStatus,
+            message: `Page written to DA. Preview ${previewStatus}.`,
+            _action: 'refresh_preview',
+            _preview_path: pagePath,
+          }, null, 2);
+        } catch (daErr) {
+          console.warn('[edit_page_content] DA write also failed:', daErr.message);
+        }
+      }
+
+      // ── srcdoc fallback (last resort — ephemeral preview) ──
+      return JSON.stringify({
+        status: 'local_preview',
+        page_path: pagePath,
+        content_length: input.html.length,
+        html: input.html,
+        base_url: baseUrl,
+        preview_url: previewUrl,
+        da_edit_url: daUrl,
+        message: `Content rendered in preview for ${pagePath}. Local content API not available — preview is ephemeral.`,
+        _action: 'local_preview',
+        _preview_path: pagePath,
+        _preview_html: input.html,
+        _preview_base: baseUrl,
+      }, null, 2);
     }
 
     case 'preview_page': {

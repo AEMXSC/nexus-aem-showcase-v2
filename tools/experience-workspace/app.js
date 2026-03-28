@@ -1206,11 +1206,10 @@ async function handleRealChat(text, file) {
     try {
       const result = JSON.parse(resultStr);
 
-      // Local preview mode — render HTML directly in iframe (no DA auth needed)
-      if (result._action === 'local_preview' && result._preview_html) {
+      // Local write mode (AEMCoder pattern) — content saved to local folder + decorated preview
+      if (result._action === 'local_write' && result._preview_html) {
         const html = result._preview_html;
         const base = result._preview_base || '';
-        // Build a full EDS page that loads the site's styles and scripts
         const srcdoc = `<!DOCTYPE html>
 <html>
 <head>
@@ -1228,17 +1227,40 @@ async function handleRealChat(text, file) {
 </body>
 </html>`;
         previewFrame.srcdoc = srcdoc;
-        showToast(`Preview: ${result._preview_path || 'page'} (local)`, 'success');
+        showToast(`Page ${result._preview_path} saved — preview updated`, 'success');
+      }
+
+      // Ephemeral preview fallback — render HTML directly in iframe (no file write)
+      if (result._action === 'local_preview' && result._preview_html) {
+        const html = result._preview_html;
+        const base = result._preview_base || '';
+        const srcdoc = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base href="${base}/">
+  <link rel="stylesheet" href="${base}/styles/styles.css">
+  <script src="${base}/scripts/aem.js" type="module"></script>
+  <script src="${base}/scripts/scripts.js" type="module"></script>
+</head>
+<body>
+  <header></header>
+  <main>${html}</main>
+  <footer></footer>
+</body>
+</html>`;
+        previewFrame.srcdoc = srcdoc;
+        showToast(`Preview: ${result._preview_path || 'page'} (ephemeral)`, 'success');
       }
 
       // DA write mode — refresh from aem.page CDN
       if (result._action === 'refresh_preview' && result._preview_path) {
         const path = result._preview_path;
-        // Small delay to let AEM preview CDN catch up
         setTimeout(() => {
           navigateToPage(path);
           showToast(result.status === 'written'
-            ? `Page ${path} saved & preview refreshed`
+            ? `Page ${path} saved to DA & preview refreshed`
             : `Preview refreshed for ${path}`,
           result.status === 'error' ? 'error' : 'success');
         }, 1500);
