@@ -2409,7 +2409,8 @@ const editInDABtn = document.getElementById('editInDABtn');
 if (editInDABtn) {
   editInDABtn.addEventListener('click', () => {
     let path = activeResourcePath || '/';
-    // DA uses /index for the homepage, not /
+    // Clean path for DA: strip .html, trailing slash, map / → /index
+    path = path.replace(/\.html$/, '').replace(/\/$/, '') || '/';
     if (path === '/') path = '/index';
     const daUrl = `https://da.live/edit#/${AEM_ORG.orgId}/${AEM_ORG.repo}${path}`;
     window.open(daUrl, '_blank');
