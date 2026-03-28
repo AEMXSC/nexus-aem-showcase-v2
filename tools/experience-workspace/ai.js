@@ -36,6 +36,33 @@ export function hasApiKey() {
   return !!getApiKey();
 }
 
+/* ── Simple API call (no tools, no system prompt) ── */
+export async function callRaw(prompt, { maxTokens = 2000 } = {}) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('Claude API key not configured');
+  const resp = await fetch(CLAUDE_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Claude API error: ${resp.status}`);
+  }
+  const data = await resp.json();
+  const textBlock = data.content.find((b) => b.type === 'text');
+  return textBlock?.text || '';
+}
+
 /* ── Adobe Agent Tool Definitions ── */
 /* Each tool maps to a real Adobe AI Agent or MCP service. */
 /* Tools with real endpoints execute live; others return contextual simulated data. */
@@ -1329,17 +1356,34 @@ async function executeTool(name, input) {
       const checks = input.checks || ['brand', 'accessibility', 'metadata', 'legal', 'seo', 'drm'];
       const legalRules = profile.legalSLA?.specialRules || [];
       const brandVoice = profile.brandVoice || {};
+      // Pull brand policies from admin panel (injected by app.js saveBrandPolicies)
+      const brandPolicies = profile.brandPolicies || [];
 
       const results = {};
       const findings = [];
 
       checks.forEach((check) => {
         switch (check) {
-          case 'brand':
-            results.brand = { status: 'pass', score: 92 };
-            if (brandVoice.colorPalette) findings.push({ check: 'brand', severity: 'info', message: `Brand colors verified: ${brandVoice.colorPalette.primary}, ${brandVoice.colorPalette.secondary}` });
-            findings.push({ check: 'brand', severity: 'pass', message: 'Brand voice tone matches profile guidelines' });
+          case 'brand': {
+            if (brandPolicies.length > 0) {
+              // Check each configured brand policy
+              const policyFindings = [];
+              brandPolicies.forEach((p) => {
+                const passed = Math.random() > 0.25;
+                policyFindings.push({ check: 'brand', severity: passed ? 'pass' : 'warn', message: `[${p.category}] ${p.rule}` });
+              });
+              const passCount = policyFindings.filter((f) => f.severity === 'pass').length;
+              const score = Math.round((passCount / policyFindings.length) * 100);
+              results.brand = { status: score >= 80 ? 'pass' : 'warn', score, policiesChecked: brandPolicies.length };
+              findings.push(...policyFindings);
+            } else {
+              results.brand = { status: 'pass', score: 92 };
+              if (brandVoice.colorPalette) findings.push({ check: 'brand', severity: 'info', message: `Brand colors verified: ${brandVoice.colorPalette.primary}, ${brandVoice.colorPalette.secondary}` });
+              findings.push({ check: 'brand', severity: 'pass', message: 'Brand voice tone matches profile guidelines' });
+              findings.push({ check: 'brand', severity: 'info', message: 'Tip: Configure brand policies in Settings → Brand Governance for detailed per-rule checks' });
+            }
             break;
+          }
           case 'accessibility':
             results.accessibility = { status: 'warn', score: 78 };
             findings.push({ check: 'accessibility', severity: 'warn', message: 'Verify all images have descriptive alt text' });

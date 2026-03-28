@@ -87,6 +87,52 @@
         <div id="settingsConnectors" class="settings-connectors"></div>
         <div class="settings-hint">Registered connectors from Admin Console</div>
 
+        <!-- Brand Governance -->
+        <div class="settings-divider"></div>
+        <label class="settings-label">Brand Governance</label>
+        <div class="settings-hint" style="margin-bottom:8px">Upload brand guidelines or connect an enterprise MCP endpoint. Policies extracted here are enforced in every governance scan.</div>
+
+        <div class="brand-config">
+          <div class="brand-config-row">
+            <label class="brand-config-label">Brand PDF</label>
+            <div class="brand-upload-wrap">
+              <input type="file" id="brandPdfInput" accept=".pdf" style="display:none">
+              <button class="brand-upload-btn" id="brandUploadBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload PDF
+              </button>
+              <span class="brand-upload-status" id="brandPdfStatus">No file</span>
+            </div>
+          </div>
+
+          <div class="brand-config-row">
+            <label class="brand-config-label">Brand URL</label>
+            <input type="text" class="brand-url-input" id="brandUrlInput" placeholder="https://brand.example.com/guidelines" autocomplete="off">
+          </div>
+
+          <div class="brand-config-row">
+            <label class="brand-config-label">Enterprise MCP</label>
+            <input type="text" class="brand-url-input" id="brandMcpInput" placeholder="https://brand-mcp.customer.com/v1/policies" autocomplete="off">
+            <div class="settings-hint" style="margin-top:4px">Customer-controlled brand policy endpoint — we query, they own the rules</div>
+          </div>
+
+          <button class="brand-extract-btn" id="brandExtractBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Extract Brand Policies
+          </button>
+        </div>
+
+        <!-- Active Brand Policies -->
+        <div class="brand-policies" id="brandPolicies">
+          <div class="brand-policies-header">
+            <span class="brand-policies-title">Active Policies</span>
+            <span class="brand-policies-count" id="brandPolicyCount">0 rules</span>
+          </div>
+          <div class="brand-policies-list" id="brandPolicyList">
+            <div class="brand-policy-empty">No brand policies configured. Upload a PDF, paste a URL, or connect an enterprise MCP endpoint above.</div>
+          </div>
+        </div>
+
         <div class="settings-actions">
           <button class="settings-save" onclick="document.getElementById('settingsPanel').classList.remove('visible'); const k=document.getElementById('claudeKeyInput'); if(k.value && !k.value.endsWith('...')) localStorage.setItem('ew-claude-key',k.value.trim()); location.reload();">Save</button>
           <button class="settings-cancel" onclick="document.getElementById('settingsPanel').classList.remove('visible')">Cancel</button>

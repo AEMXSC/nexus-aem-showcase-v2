@@ -465,6 +465,185 @@ html, body {
   color: var(--text-primary);
 }
 
+.settings-divider {
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+/* ─── Brand Governance ─── */
+.brand-config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.brand-config-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand-config-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.brand-upload-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.brand-upload-btn:hover {
+  background: var(--bg-card);
+}
+
+.brand-upload-status {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.brand-upload-status.loaded {
+  color: #34d399;
+}
+
+.brand-url-input {
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.brand-url-input:focus {
+  border-color: var(--accent);
+}
+
+.brand-extract-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #4a5cdb 0%, #6366f1 100%);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  margin-top: 4px;
+}
+
+.brand-extract-btn:hover {
+  opacity: 0.9;
+}
+
+.brand-extract-btn.extracting {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Active Brand Policies */
+.brand-policies {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.brand-policies-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand-policies-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.brand-policies-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.brand-policies-list {
+  padding: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.brand-policy-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 12px;
+}
+
+.brand-policy-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.brand-policy-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.brand-policy-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.brand-policy-text {
+  font-size: 11px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.brand-policy-category {
+  font-size: 10px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.brand-policy-item.pass .brand-policy-icon { color: #34d399; }
+.brand-policy-item.fail .brand-policy-icon { color: #f87171; }
+.brand-policy-item.warn .brand-policy-icon { color: #fbbf24; }
+
 /* ─── Chat Area ─── */
 .chat-area {
   flex: 1;

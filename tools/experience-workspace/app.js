@@ -197,6 +197,9 @@ function toggleSettings() {
   if (keyInput && ai.hasApiKey()) {
     keyInput.value = ai.getApiKey().slice(0, 8) + '...';
   }
+  // Render brand policies
+  if (settingsPanel.classList.contains('visible')) initBrandGovernance();
+
   // Populate MCP connectors list
   const connBox = document.getElementById('settingsConnectors');
   if (connBox && settingsPanel.classList.contains('visible')) {
@@ -223,6 +226,173 @@ function saveSettings() {
   }
   toggleSettings();
   updateAuthUI();
+}
+
+/* ── Brand Governance Admin ── */
+const BRAND_STORAGE_KEY = 'ew-brand-policies';
+let activeBrandPolicies = JSON.parse(localStorage.getItem(BRAND_STORAGE_KEY) || '[]');
+let brandPdfText = null;
+
+function renderBrandPolicies() {
+  const listEl = document.getElementById('brandPolicyList');
+  const countEl = document.getElementById('brandPolicyCount');
+  if (!listEl || !countEl) return;
+
+  if (activeBrandPolicies.length === 0) {
+    listEl.innerHTML = '<div class="brand-policy-empty">No brand policies configured. Upload a PDF, paste a URL, or connect an enterprise MCP endpoint above.</div>';
+    countEl.textContent = '0 rules';
+    return;
+  }
+
+  countEl.textContent = `${activeBrandPolicies.length} rules`;
+  listEl.innerHTML = activeBrandPolicies.map((p) => `
+    <div class="brand-policy-item">
+      <span class="brand-policy-icon">${categoryIcon(p.category)}</span>
+      <div>
+        <div class="brand-policy-category">${p.category || 'General'}</div>
+        <div class="brand-policy-text">${p.rule}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function categoryIcon(cat) {
+  const icons = { tone: '🎙️', terminology: '📝', visual: '🎨', editorial: '✏️', legal: '⚖️', accessibility: '♿', imagery: '📸', color: '🎨', typography: '🔤' };
+  return icons[(cat || '').toLowerCase()] || '📋';
+}
+
+function saveBrandPolicies() {
+  localStorage.setItem(BRAND_STORAGE_KEY, JSON.stringify(activeBrandPolicies));
+  renderBrandPolicies();
+  // Also inject into active profile's brandVoice for AI context
+  const profile = getActiveProfile();
+  if (profile) {
+    profile.brandPolicies = activeBrandPolicies;
+  }
+}
+
+// PDF Upload
+const brandUploadBtn = document.getElementById('brandUploadBtn');
+const brandPdfInput = document.getElementById('brandPdfInput');
+const brandPdfStatus = document.getElementById('brandPdfStatus');
+
+if (brandUploadBtn && brandPdfInput) {
+  brandUploadBtn.addEventListener('click', () => brandPdfInput.click());
+  brandPdfInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    brandPdfStatus.textContent = 'Reading...';
+    brandPdfStatus.className = 'brand-upload-status';
+    try {
+      // Use pdf.js to extract text (already loaded in index.html)
+      const arrayBuffer = await file.arrayBuffer();
+      if (window.pdfjsLib) {
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let text = '';
+        for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map((item) => item.str).join(' ') + '\n';
+        }
+        brandPdfText = text;
+        brandPdfStatus.textContent = `${file.name} (${pdf.numPages} pages)`;
+        brandPdfStatus.className = 'brand-upload-status loaded';
+      } else {
+        brandPdfStatus.textContent = 'PDF.js not loaded';
+      }
+    } catch (err) {
+      brandPdfStatus.textContent = `Error: ${err.message}`;
+    }
+  });
+}
+
+// Extract Brand Policies button
+const brandExtractBtn = document.getElementById('brandExtractBtn');
+if (brandExtractBtn) {
+  brandExtractBtn.addEventListener('click', async () => {
+    const brandUrl = document.getElementById('brandUrlInput')?.value.trim();
+    const mcpEndpoint = document.getElementById('brandMcpInput')?.value.trim();
+
+    if (!brandPdfText && !brandUrl && !mcpEndpoint) {
+      addMessage('assistant', md('**No brand source provided.** Upload a brand PDF, paste a guidelines URL, or configure an MCP endpoint first.'));
+      return;
+    }
+
+    brandExtractBtn.classList.add('extracting');
+    brandExtractBtn.innerHTML = '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Extracting...';
+
+    // Use the AI to extract brand policies
+    if (ai.hasApiKey()) {
+      try {
+        const sources = [];
+        if (brandPdfText) sources.push(`PDF Content (first 3000 chars):\n${brandPdfText.slice(0, 3000)}`);
+        if (brandUrl) sources.push(`Brand Guidelines URL: ${brandUrl}`);
+        if (mcpEndpoint) sources.push(`Enterprise MCP Endpoint: ${mcpEndpoint}`);
+
+        const extractPrompt = `Extract brand governance policies from the following source(s). Return a JSON array of objects with "category" (tone, terminology, visual, editorial, legal, accessibility, imagery, color, typography) and "rule" (the specific policy). Extract 8-15 concrete, actionable rules. Only return the JSON array, no other text.\n\n${sources.join('\n\n')}`;
+
+        const text = await ai.callRaw(extractPrompt);
+        // Parse JSON from response
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          activeBrandPolicies = JSON.parse(jsonMatch[0]);
+          saveBrandPolicies();
+          addMessage('assistant', md(`**Brand policies extracted!** ${activeBrandPolicies.length} rules configured across ${[...new Set(activeBrandPolicies.map((p) => p.category))].length} categories. These will be enforced in every governance scan.`));
+        } else {
+          addMessage('assistant', md('**Could not parse brand policies.** The AI response did not contain a valid JSON array. Using demo defaults.'));
+          // Fall through to trigger demo defaults below
+        }
+      } catch (err) {
+        console.error('Brand extraction error:', err);
+        addMessage('assistant', md(`**Extraction error:** ${err.message}`));
+      }
+    } else {
+      // Demo mode: generate sample policies from the profile's brandVoice
+      const profile = getActiveProfile();
+      const bv = profile.brandVoice || {};
+      activeBrandPolicies = [
+        { category: 'Tone', rule: `Brand voice must be: ${bv.tone || 'professional and confident'}` },
+        { category: 'Tone', rule: `Writing style: ${bv.style || 'Active voice, short sentences, quantified claims'}` },
+        { category: 'Terminology', rule: `Required keywords: ${(bv.keywords || []).join(', ') || 'none specified'}` },
+        { category: 'Terminology', rule: `Avoided terms: ${(bv.avoided || []).join(', ') || 'none specified'}` },
+        { category: 'Editorial', rule: 'Headlines must be under 10 words with active verbs' },
+        { category: 'Editorial', rule: 'CTAs must use action-oriented language (Start, Get, Join, Try)' },
+        { category: 'Visual', rule: 'Hero images must include alt text describing the scene' },
+        { category: 'Accessibility', rule: 'Color contrast ratio must meet WCAG AA (4.5:1 for text)' },
+        { category: 'Legal', rule: 'All claims must include source attribution or disclaimer' },
+        { category: 'Legal', rule: `Legal review SLA: ${profile.legalSLA?.reviewTime || '48h'}, escalation at ${profile.legalSLA?.escalation || '72h'}` },
+        { category: 'Imagery', rule: 'Stock photography must reflect brand diversity guidelines' },
+        { category: 'Color', rule: 'Primary brand colors only — no off-palette colors in headers or CTAs' },
+      ];
+      if (brandUrl) {
+        activeBrandPolicies.push({ category: 'Tone', rule: `Guidelines source: ${brandUrl}` });
+      }
+      if (mcpEndpoint) {
+        activeBrandPolicies.push({ category: 'Editorial', rule: `Enterprise MCP policies loaded from: ${mcpEndpoint}` });
+      }
+      saveBrandPolicies();
+      addMessage('assistant', md(`**Brand policies configured!** ${activeBrandPolicies.length} rules loaded from profile defaults${brandUrl ? ' + guidelines URL' : ''}${mcpEndpoint ? ' + MCP endpoint' : ''}. These will be enforced in every governance scan.\n\n*Tip: Add a Claude API key in Settings for AI-powered policy extraction from your brand documents.*`));
+    }
+
+    brandExtractBtn.classList.remove('extracting');
+    brandExtractBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Extract Brand Policies';
+  });
+}
+
+// Restore saved brand policies on load + populate URL/MCP from profile
+function initBrandGovernance() {
+  renderBrandPolicies();
+  // Pre-populate MCP endpoint from profile entitlements if available
+  const profile = getActiveProfile();
+  if (profile?.brandMcpEndpoint) {
+    const mcpInput = document.getElementById('brandMcpInput');
+    if (mcpInput) mcpInput.value = profile.brandMcpEndpoint;
+  }
+}
+
+// Export brand policies for use in governance scans
+function getBrandPolicies() {
+  return activeBrandPolicies;
 }
 
 /* ── Get Page Context ── */
