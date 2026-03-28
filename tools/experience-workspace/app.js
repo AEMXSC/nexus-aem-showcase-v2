@@ -2608,7 +2608,7 @@ async function init() {
   // Connect site: load preview + resources + home badge
   connectSite();
 
-  // Initialize IMS
+  // Initialize IMS — force sign-in on load so the redirect happens before any chat state exists
   try {
     await loadIms();
   } catch (err) {
@@ -2616,6 +2616,14 @@ async function init() {
   }
 
   updateAuthUI();
+
+  // Auto-trigger sign-in if not already authenticated
+  // This ensures the IMS redirect happens before the user starts chatting,
+  // preventing the "redirect loses my chat" problem
+  if (!isSignedIn()) {
+    signIn();
+    return; // page will redirect — no need to continue init
+  }
 
   // Pre-fetch page context after iframe starts loading
   setTimeout(() => ensurePageContext(), 3000);
