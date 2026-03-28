@@ -197,6 +197,23 @@ function toggleSettings() {
   if (keyInput && ai.hasApiKey()) {
     keyInput.value = ai.getApiKey().slice(0, 8) + '...';
   }
+  // Populate MCP connectors list
+  const connBox = document.getElementById('settingsConnectors');
+  if (connBox && settingsPanel.classList.contains('visible')) {
+    const profile = getActiveProfile();
+    const connectors = profile.connectors || [];
+    if (connectors.length === 0) { connBox.innerHTML = '<div style="font-size:11px;color:var(--text-muted)">No connectors configured</div>'; return; }
+    const liveCount = connectors.filter((c) => c.status === 'live').length;
+    let html = `<div class="conn-summary">${liveCount} of ${connectors.length} live</div>`;
+    html += '<div class="conn-list">';
+    connectors.forEach((c) => {
+      const dot = c.status === 'live' ? 'var(--green)' : 'var(--yellow)';
+      const ep = c.endpoint ? `<span class="conn-endpoint">${c.endpoint}</span>` : '';
+      html += `<div class="conn-row"><span class="conn-dot" style="background:${dot}"></span><span class="conn-name">${c.name}</span><span class="conn-env">${c.env}</span>${ep}</div>`;
+    });
+    html += '</div>';
+    connBox.innerHTML = html;
+  }
 }
 
 function saveSettings() {
@@ -1503,28 +1520,11 @@ async function runServicesPanel() {
 
   addRawHTML(`<div class="agent-badge">MCP Services</div><div class="message-content">${html}</div>`);
 
-  // Show real MCP connectors
   addTyping();
-  await sleep(600);
+  await sleep(400);
   removeTyping();
 
-  const connectors = profile.connectors || [];
-  if (connectors.length > 0) {
-    let conHTML = '<strong>Registered MCP Connectors</strong>';
-    conHTML += '<table class="gov-results" style="margin-top:10px"><tr><th>Connector</th><th>Environment</th><th>Type</th></tr>';
-    connectors.forEach((c) => {
-      conHTML += `<tr><td>${c.name}</td><td>${c.env}</td><td><span style="font-size:10px;padding:2px 6px;border-radius:3px;background:${c.type === 'NATIVE' ? 'color-mix(in srgb, var(--green) 15%, transparent)' : 'var(--accent-dim)'};color:${c.type === 'NATIVE' ? 'var(--green)' : 'var(--accent-light)'};font-weight:600">${c.type}</span></td></tr>`;
-    });
-    conHTML += '</table>';
-    conHTML += `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">${connectors.length} connectors registered · ${connectors.filter((c) => c.status === 'live').length} active</div>`;
-    addRawHTML(`<div class="agent-badge">Connectors</div><div class="message-content">${conHTML}</div>`);
-
-    addTyping();
-    await sleep(400);
-    removeTyping();
-  }
-
-  // Show entitlements
+  // Show entitlements (connector inventory is in Settings)
   const ents = profile.entitlements || AEM_ORG.entitlements;
   let entHTML = '<strong>Mapped Entitlements</strong>';
   entHTML += '<div class="issue-list" style="margin-top:8px">';
@@ -1537,7 +1537,7 @@ async function runServicesPanel() {
     entHTML += `<div class="issue-item">⚡ <strong>${e.name}</strong> — ${e.mcp} · ${e.note}</div>`;
   });
   entHTML += '</div>';
-  entHTML += `<div class="money-line">${liveEnts.length} of ${Object.values(ents).length} services live — ${connectors.length} MCP connectors registered across Prod, Stage, and Dev environments.</div>`;
+  entHTML += `<div class="money-line">${liveEnts.length} of ${Object.values(ents).length} services live.</div>`;
 
   addRawHTML(`<div class="agent-badge">Entitlements</div><div class="message-content">${entHTML}</div>`);
 }
@@ -1741,11 +1741,8 @@ function connectSite() {
   const profile = getActiveProfile();
   // Update home badge
   if (homeSiteName) homeSiteName.textContent = AEM_ORG.name;
-  const connectorCount = profile.connectors?.length || 0;
   if (homeSiteUrl) {
-    homeSiteUrl.textContent = connectorCount > 0
-      ? `${origin.replace(/^https?:\/\//, '')} · ${connectorCount} MCP connectors`
-      : origin.replace(/^https?:\/\//, '');
+    homeSiteUrl.textContent = origin.replace(/^https?:\/\//, '');
   }
 
   // Load preview iframe with homepage
