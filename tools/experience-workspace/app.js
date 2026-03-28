@@ -9,10 +9,10 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken, relaySignIn, getBookmarkletCode } from './ims.js?v=22';
-import * as ai from './ai.js?v=22';
-import { TOOL_AGENT_MAP } from './ai.js?v=22';
-import * as da from './da-client.js?v=22';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken, relaySignIn, getBookmarkletCode } from './ims.js?v=23';
+import * as ai from './ai.js?v=23';
+import { TOOL_AGENT_MAP } from './ai.js?v=23';
+import * as da from './da-client.js?v=23';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
@@ -1113,8 +1113,14 @@ async function handleRealChat(text, file) {
       { type: 'image', source: { type: 'base64', media_type: file.mediaType, data: file.content } },
       { type: 'text', text: text || `Analyze this image: ${file.name}` },
     ];
+  } else if (file && file.type === 'pdf') {
+    // PDF: send as native Claude document block (base64)
+    messageContent = [
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: file.content } },
+      { type: 'text', text: text || `Analyze this document: ${file.name}` },
+    ];
   } else if (file && file.type === 'document') {
-    // Document: inject text content
+    // Text document (DOCX extracted text, .txt, .csv, etc.): inject as text
     messageContent = `${text || `Analyze this document: ${file.name}`}\n\n--- Attached file: ${file.name} ---\n${file.content.slice(0, 30000)}${file.content.length > 30000 ? '\n\n[... truncated]' : ''}`;
   } else {
     messageContent = text;
@@ -2813,9 +2819,22 @@ if (attachBtn) {
           const base64 = btoa(binary);
           pendingFile = { name: file.name, type: 'image', size: file.size, content: base64, mediaType: file.type };
         } else if (file.type === 'application/pdf') {
-          // PDFs → extract text
-          const text = await extractPdfText(file);
-          pendingFile = { name: file.name, type: 'document', size: file.size, content: text, mediaType: file.type };
+          // PDFs → base64 for Claude's native document handling
+          const buffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+          const base64 = btoa(binary);
+          pendingFile = { name: file.name, type: 'pdf', size: file.size, content: base64, mediaType: 'application/pdf' };
+        } else if (file.name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          // DOCX → extract text via mammoth.js
+          if (window.mammoth) {
+            const buffer = await file.arrayBuffer();
+            const result = await window.mammoth.extractRawText({ arrayBuffer: buffer });
+            pendingFile = { name: file.name, type: 'document', size: file.size, content: result.value, mediaType: 'text/plain' };
+          } else {
+            throw new Error('DOCX support not loaded. Please refresh and try again.');
+          }
         } else {
           // Text files → read as text
           const text = await file.text();
@@ -3383,7 +3402,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v22 — relay sign-in (bookmarklet + postMessage)');
+  console.log('[EW] init v23 — fix DOCX/PDF uploads (mammoth.js + Claude native docs)');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {
