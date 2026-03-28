@@ -9,10 +9,10 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=16';
-import * as ai from './ai.js?v=16';
-import { TOOL_AGENT_MAP } from './ai.js?v=16';
-import * as da from './da-client.js';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=17';
+import * as ai from './ai.js?v=17';
+import { TOOL_AGENT_MAP } from './ai.js?v=17';
+import * as da from './da-client.js?v=17';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
@@ -2831,7 +2831,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v16 — no auth gate, DA tools try-first');
+  console.log('[EW] init v17 — DA MCP integration (mcp.adobeaemcloud.com)');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {
