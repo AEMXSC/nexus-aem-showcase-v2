@@ -2837,15 +2837,9 @@ async function init() {
 
   updateAuthUI();
 
-  // Auto-trigger sign-in if not already authenticated (production only)
-  // Uses popup flow — main window stays on Experience Workspace.
-  // Skip on localhost so local dev/testing works without Adobe IMS.
-  const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  if (!isSignedIn() && !isLocalhost) {
-    signIn();
-    // Popup keeps us on this page — continue init so the UI loads
-    // Page will reload after popup closes to pick up IMS session
-  }
+  // Don't auto-trigger sign-in — browsers block popups without a user gesture.
+  // Instead, let the user click "Sign In" which triggers the popup flow properly.
+  // The UI loads normally; auth-gated features prompt for sign-in as needed.
 
   // Auto-connect default site and go straight to editor
   // XSC team members sign in → land directly in the editor with the team site loaded
