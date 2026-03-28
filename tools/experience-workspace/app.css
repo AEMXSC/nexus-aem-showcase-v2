@@ -385,6 +385,55 @@ html, body {
   box-shadow: 0 0 0 1px var(--border-focus);
 }
 
+.settings-token-row {
+  display: flex;
+  gap: 6px;
+}
+
+.settings-token-row .settings-input {
+  flex: 1;
+}
+
+.settings-token-btn {
+  padding: 6px 14px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.settings-token-btn:hover {
+  background: var(--accent-hover, #2563eb);
+}
+
+.settings-token-status {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.settings-token-status.success {
+  color: #34d399;
+}
+
+.settings-token-status.error {
+  color: #f87171;
+}
+
+.settings-link {
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+.settings-link:hover {
+  text-decoration: underline;
+}
+
 .settings-hint {
   font-size: 11px;
   color: var(--text-muted);

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Experience Workspace</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e34850'><path d='M12 2L2 7l10 5 10-5-10-5z'/><path d='M2 17l10 5 10-5'/><path d='M2 12l10 5 10-5'/></svg>">
-  <link rel="stylesheet" href="app.css?v=20">
+  <link rel="stylesheet" href="app.css?v=21">
 </head>
 <body>
   <div class="workspace">
@@ -82,6 +82,17 @@
         <label class="settings-label" style="margin-top:16px">Claude API Key</label>
         <input type="password" id="claudeKeyInput" class="settings-input" placeholder="sk-ant-...">
         <div class="settings-hint">Enables real AI chat, governance analysis, and brief processing</div>
+
+        <label class="settings-label" style="margin-top:16px">Adobe IMS Token</label>
+        <div class="settings-token-row">
+          <input type="password" id="imsTokenInput" class="settings-input" placeholder="eyJhbGci...">
+          <button class="settings-token-btn" id="imsTokenBtn" title="Paste token">Set</button>
+        </div>
+        <div class="settings-hint">
+          Paste your IMS token to enable DA content editing.
+          <a href="#" id="imsTokenHelp" class="settings-link">How to get your token</a>
+        </div>
+        <div class="settings-token-status" id="imsTokenStatus"></div>
 
         <label class="settings-label" style="margin-top:16px">MCP Connectors</label>
         <div id="settingsConnectors" class="settings-connectors"></div>
@@ -381,6 +392,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
-  <script src="app.js?v=20" type="module"></script>
+  <script src="app.js?v=21" type="module"></script>
 </body>
 </html>

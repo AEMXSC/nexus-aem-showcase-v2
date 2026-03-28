@@ -9,10 +9,10 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=20';
-import * as ai from './ai.js?v=20';
-import { TOOL_AGENT_MAP } from './ai.js?v=20';
-import * as da from './da-client.js?v=20';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=21';
+import * as ai from './ai.js?v=21';
+import { TOOL_AGENT_MAP } from './ai.js?v=21';
+import * as da from './da-client.js?v=21';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
@@ -198,6 +198,17 @@ function toggleSettings() {
   if (keyInput && ai.hasApiKey()) {
     keyInput.value = ai.getApiKey().slice(0, 8) + '...';
   }
+  // Show IMS token status
+  const imsInput = document.getElementById('imsTokenInput');
+  const imsStatus = document.getElementById('imsTokenStatus');
+  const existingToken = localStorage.getItem('ew-ims-token');
+  if (imsInput && existingToken) {
+    imsInput.value = existingToken.slice(0, 12) + '...';
+    if (imsStatus) {
+      imsStatus.textContent = 'Token set — DA editing enabled';
+      imsStatus.className = 'settings-token-status success';
+    }
+  }
   // Render brand policies
   if (settingsPanel.classList.contains('visible')) initBrandGovernance();
 
@@ -227,6 +238,79 @@ function saveSettings() {
   }
   toggleSettings();
   updateAuthUI();
+}
+
+/* ── IMS Token paste ── */
+const imsTokenBtn = document.getElementById('imsTokenBtn');
+const imsTokenInput = document.getElementById('imsTokenInput');
+const imsTokenStatus = document.getElementById('imsTokenStatus');
+const imsTokenHelp = document.getElementById('imsTokenHelp');
+
+if (imsTokenBtn && imsTokenInput) {
+  imsTokenBtn.addEventListener('click', async () => {
+    const token = imsTokenInput.value.trim();
+    if (!token || token.endsWith('...')) return;
+
+    // Validate token by calling admin.hlx.page/status (no auth needed for GET, but test a simple endpoint)
+    imsTokenStatus.textContent = 'Validating...';
+    imsTokenStatus.className = 'settings-token-status';
+
+    try {
+      // Quick validation: try to list DA source with the token
+      const resp = await fetch(`https://admin.da.live/source/${da.getOrg()}/${da.getRepo()}/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (resp.ok) {
+        localStorage.setItem('ew-ims-token', token);
+        localStorage.setItem('ew-ims', 'true');
+        imsTokenInput.value = token.slice(0, 12) + '...';
+        imsTokenStatus.textContent = 'Token valid — DA editing enabled! Reload to apply.';
+        imsTokenStatus.className = 'settings-token-status success';
+        updateAuthUI();
+        // Reset MCP state so it re-probes with the new token
+        da.resetMcpState?.();
+      } else if (resp.status === 401) {
+        imsTokenStatus.textContent = 'Token expired or invalid (401). Get a fresh one from da.live.';
+        imsTokenStatus.className = 'settings-token-status error';
+      } else {
+        // Non-401 error — token might still work, store it
+        localStorage.setItem('ew-ims-token', token);
+        localStorage.setItem('ew-ims', 'true');
+        imsTokenInput.value = token.slice(0, 12) + '...';
+        imsTokenStatus.textContent = `Token set (DA returned ${resp.status}). Try editing a page.`;
+        imsTokenStatus.className = 'settings-token-status success';
+        updateAuthUI();
+      }
+    } catch (err) {
+      // Network error — store token anyway, let the user try
+      localStorage.setItem('ew-ims-token', token);
+      localStorage.setItem('ew-ims', 'true');
+      imsTokenInput.value = token.slice(0, 12) + '...';
+      imsTokenStatus.textContent = 'Token saved (could not validate). Try editing a page.';
+      imsTokenStatus.className = 'settings-token-status success';
+      updateAuthUI();
+    }
+  });
+}
+
+if (imsTokenHelp) {
+  imsTokenHelp.addEventListener('click', (e) => {
+    e.preventDefault();
+    const helpHtml = `
+      <div style="font-size:12px;line-height:1.6;color:var(--text-secondary);margin-top:8px;padding:10px;background:var(--bg-secondary);border-radius:6px;">
+        <strong style="color:var(--text-primary)">How to get your IMS token:</strong><br>
+        1. Go to <a href="https://da.live" target="_blank" style="color:var(--accent-light)">da.live</a> and sign in with Adobe ID<br>
+        2. Open browser DevTools (F12) → Console<br>
+        3. Run: <code style="background:var(--bg-input);padding:2px 6px;border-radius:3px;font-size:11px;">copy(adobeIMS.getAccessToken().token)</code><br>
+        4. Token is now on your clipboard — paste it above<br>
+        <br>
+        <em style="color:var(--text-muted)">Tokens expire after ~24hrs. Re-paste when needed.</em>
+      </div>
+    `;
+    imsTokenStatus.innerHTML = helpHtml;
+    imsTokenStatus.className = 'settings-token-status';
+  });
 }
 
 /* ── Brand Governance Admin ── */
@@ -3158,7 +3242,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v20 — wider chat + drag resize');
+  console.log('[EW] init v21 — IMS token paste for DA editing');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {
