@@ -41,7 +41,9 @@ export function isSignedIn() {
 export function signIn() {
   localStorage.setItem('ew-ims', 'true');
   if (window.adobeIMS) {
-    window.adobeIMS.signIn();
+    window.adobeIMS.signIn({
+      redirect_uri: `${window.location.origin}${window.location.pathname}`,
+    });
   }
 }
 
@@ -62,6 +64,9 @@ export async function loadIms() {
       resolve({ anonymous: true });
     }, IMS_TIMEOUT);
 
+    // Redirect back to THIS page after sign-in (not da.live)
+    const redirectUri = `${window.location.origin}${window.location.pathname}`;
+
     window.adobeid = {
       client_id: IMS_CLIENT_ID,
       scope: IMS_SCOPE,
@@ -69,6 +74,7 @@ export async function loadIms() {
       autoValidateToken: true,
       environment: IMS_ENV,
       useLocalStorage: true,
+      redirect_uri: redirectUri,
       onReady: async () => {
         clearTimeout(timeout);
         const accessToken = window.adobeIMS.getAccessToken();
