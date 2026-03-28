@@ -9,10 +9,10 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=19';
-import * as ai from './ai.js?v=19';
-import { TOOL_AGENT_MAP } from './ai.js?v=19';
-import * as da from './da-client.js?v=19';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=20';
+import * as ai from './ai.js?v=20';
+import { TOOL_AGENT_MAP } from './ai.js?v=20';
+import * as da from './da-client.js?v=20';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
@@ -1884,6 +1884,7 @@ function switchView(view) {
 function setLayout(layout) {
   if (!panels) return;
   panels.dataset.layout = layout;
+  panels.style.gridTemplateColumns = ''; // Reset drag override
   document.querySelectorAll('.layout-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.layout === layout);
   });
@@ -2644,6 +2645,50 @@ document.querySelectorAll('.layout-btn').forEach((btn) => {
   });
 });
 
+// ── Panel resize handle (drag to resize chat ↔ preview) ──
+const resizeHandle = document.getElementById('panelResizeHandle');
+if (resizeHandle && panels) {
+  let isDragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  resizeHandle.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    startX = e.clientX;
+    const chatPanel = document.getElementById('panelChat');
+    startWidth = chatPanel.getBoundingClientRect().width;
+    resizeHandle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    // Prevent iframe from stealing mouse events
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach((f) => { f.style.pointerEvents = 'none'; });
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const newWidth = Math.max(280, Math.min(startWidth + dx, window.innerWidth * 0.6));
+    const layout = panels.dataset.layout;
+    if (layout === 'full') {
+      panels.style.gridTemplateColumns = `${newWidth}px auto 1fr 220px`;
+    } else if (layout === 'chat-preview') {
+      panels.style.gridTemplateColumns = `${newWidth}px auto 1fr`;
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    resizeHandle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach((f) => { f.style.pointerEvents = ''; });
+  });
+}
+
 // Home card click → switch to editor + trigger flow
 document.querySelectorAll('.home-card').forEach((card) => {
   card.addEventListener('click', () => {
@@ -3113,7 +3158,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v19 — file tree via GitHub API + admin.hlx.page');
+  console.log('[EW] init v20 — wider chat + drag resize');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {
