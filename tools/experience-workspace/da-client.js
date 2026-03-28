@@ -8,7 +8,7 @@ import { fetchWithToken, getToken } from './ims.js';
 
 const DA_ADMIN = 'https://admin.da.live';
 let DA_ORG = 'AEMXSC';
-let DA_REPO = 'nexus-aem-showcase-v2';
+let DA_REPO = 'xscteamsite';
 let DA_BRANCH = 'main';
 
 export function configure({ org, repo, branch } = {}) {

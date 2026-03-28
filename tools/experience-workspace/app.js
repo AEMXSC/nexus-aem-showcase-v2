@@ -1847,13 +1847,14 @@ let customSiteConnected = false;
 async function connectCustomSite(orgRepo) {
   const statusEl = document.getElementById('connectSiteStatus');
   const btn = document.getElementById('connectSiteBtn');
-  if (!statusEl || !btn) return;
 
   // Parse org/repo
   const parts = orgRepo.trim().replace(/^https?:\/\/github\.com\//, '').split('/');
   if (parts.length < 2) {
-    statusEl.textContent = 'Enter org/repo format (e.g., AEMXSC/nexus-aem-showcase-v2)';
-    statusEl.className = 'connect-site-status error';
+    if (statusEl) {
+      statusEl.textContent = 'Enter org/repo format (e.g., AEMXSC/xscteamsite)';
+      statusEl.className = 'connect-site-status error';
+    }
     return;
   }
 
@@ -1861,12 +1862,16 @@ async function connectCustomSite(orgRepo) {
   const branch = 'main';
   const previewOrigin = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
 
-  // Show loading state
-  statusEl.textContent = `Connecting to ${org}/${repo}...`;
-  statusEl.className = 'connect-site-status loading';
-  btn.disabled = true;
-  btn.classList.add('connecting');
-  btn.innerHTML = '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Connecting...';
+  // Show loading state (if home view elements exist)
+  if (statusEl) {
+    statusEl.textContent = `Connecting to ${org}/${repo}...`;
+    statusEl.className = 'connect-site-status loading';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('connecting');
+    btn.innerHTML = '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Connecting...';
+  }
 
   // Validate: ping the site
   let valid = false;
@@ -1914,12 +1919,16 @@ async function connectCustomSite(orgRepo) {
   // Reconfigure DA client
   da.configure({ org, repo, branch });
 
-  // Update UI
-  statusEl.textContent = `Connected to ${org}/${repo}`;
-  statusEl.className = 'connect-site-status success';
-  btn.disabled = false;
-  btn.classList.remove('connecting');
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Connected';
+  // Update UI (home view elements may not exist when switching from toolbar)
+  if (statusEl) {
+    statusEl.textContent = `Connected to ${org}/${repo}`;
+    statusEl.className = 'connect-site-status success';
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.classList.remove('connecting');
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Connected';
+  }
 
   // Update home badge
   if (homeSiteName) homeSiteName.textContent = `${org}/${repo}`;
@@ -2274,6 +2283,53 @@ if (editInUEBtn) {
   });
 }
 
+/* ── Inline Site Switcher (click toolbar URL → input → Enter to switch) ── */
+const previewSiteUrl = document.getElementById('previewSiteUrl');
+const siteSwitchInput = document.getElementById('siteSwitchInput');
+// previewUrlText already declared at top of file
+
+if (previewSiteUrl && siteSwitchInput && previewUrlText) {
+  // Click URL text → show input
+  previewSiteUrl.addEventListener('click', (e) => {
+    if (e.target === siteSwitchInput) return; // already editing
+    previewUrlText.style.display = 'none';
+    siteSwitchInput.style.display = '';
+    siteSwitchInput.value = `${AEM_ORG.orgId}/${AEM_ORG.repo}`;
+    siteSwitchInput.focus();
+    siteSwitchInput.select();
+    previewSiteUrl.classList.add('editing');
+  });
+
+  // Enter → switch site, Escape → cancel
+  siteSwitchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = siteSwitchInput.value.trim();
+      if (val && val.includes('/')) {
+        // Hide input, show URL text
+        siteSwitchInput.style.display = 'none';
+        previewUrlText.style.display = '';
+        previewSiteUrl.classList.remove('editing');
+        // Use the existing connectCustomSite flow
+        connectCustomSite(val);
+      }
+    } else if (e.key === 'Escape') {
+      siteSwitchInput.style.display = 'none';
+      previewUrlText.style.display = '';
+      previewSiteUrl.classList.remove('editing');
+    }
+  });
+
+  // Blur → cancel
+  siteSwitchInput.addEventListener('blur', () => {
+    setTimeout(() => {
+      siteSwitchInput.style.display = 'none';
+      previewUrlText.style.display = '';
+      previewSiteUrl.classList.remove('editing');
+    }, 150);
+  });
+}
+
 /* ── Profile Switching ── */
 function switchProfile(profileId) {
   setActiveProfile(profileId);
@@ -2602,12 +2658,6 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  // Set initial view to home
-  switchView('home');
-
-  // Connect site: load preview + resources + home badge
-  connectSite();
-
   // Initialize IMS — force sign-in on load so the redirect happens before any chat state exists
   try {
     await loadIms();
@@ -2626,6 +2676,14 @@ async function init() {
     signIn();
     return; // page will redirect — no need to continue init
   }
+
+  // Auto-connect default site and go straight to editor
+  // XSC team members sign in → land directly in the editor with the team site loaded
+  switchView('editor');
+  connectSite();
+
+  // Welcome message
+  addMessage('assistant', md(`**Connected to ${AEM_ORG.name}** (${AEM_ORG.orgId}/${AEM_ORG.repo})\nSite loaded. You can:\n- **Prompt to edit**: "Change the hero headline"\n- **Set up experiments**: "A/B test the hero on the homepage"\n- **Generate variations**: "Create 3 hero variations targeting millennials"\n- **Add forms**: "Add a contact form to /contact"\n- **Switch site**: Click the site URL in the toolbar to connect a different repo`));
 
   // Pre-fetch page context after iframe starts loading
   setTimeout(() => ensurePageContext(), 3000);

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Experience Workspace</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e34850'><path d='M12 2L2 7l10 5 10-5-10-5z'/><path d='M2 17l10 5 10-5'/><path d='M2 12l10 5 10-5'/></svg>">
-  <link rel="stylesheet" href="app.css?v=11">
+  <link rel="stylesheet" href="app.css?v=12">
 </head>
 <body>
   <div class="workspace">
@@ -169,7 +169,7 @@
             <div class="connect-site-row">
               <div class="connect-site-input-wrap">
                 <svg class="connect-site-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
-                <input type="text" class="connect-site-input" id="connectSiteInput" placeholder="org/repo  (e.g. AEMXSC/nexus-aem-showcase-v2)" autocomplete="off">
+                <input type="text" class="connect-site-input" id="connectSiteInput" placeholder="org/repo  (e.g. AEMXSC/xscteamsite)" autocomplete="off">
                 <button class="connect-site-btn" id="connectSiteBtn">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                   Connect
@@ -281,9 +281,10 @@
                   <option value="ja-jp">ja-JP</option>
                 </select>
               </div>
-              <div class="preview-site-url">
+              <div class="preview-site-url" id="previewSiteUrl" title="Click to switch site">
                 <span class="site-dot connected" id="previewDot"></span>
                 <span class="preview-url-text" id="previewUrlText">Not connected</span>
+                <input type="text" class="site-switch-input" id="siteSwitchInput" placeholder="org/repo" autocomplete="off" style="display:none">
               </div>
               <div class="preview-actions">
                 <select class="branch-select" id="branchSelect" title="Branch">
@@ -323,6 +324,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
-  <script src="app.js?v=11" type="module"></script>
+  <script src="app.js?v=12" type="module"></script>
 </body>
 </html>

@@ -2770,6 +2770,19 @@ html, body {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  transition: background 0.15s;
+}
+
+.preview-site-url:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.preview-site-url.editing {
+  background: rgba(255,255,255,0.08);
 }
 
 .preview-url-text {
@@ -2779,6 +2792,23 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.site-switch-input {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 3px 8px;
+  width: 100%;
+  outline: none;
+}
+
+.site-switch-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
 .preview-actions {

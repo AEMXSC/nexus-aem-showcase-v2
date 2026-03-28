@@ -34,14 +34,14 @@ export const KNOWN_SITES = {
   },
 
   'aem-xsc-showcase': {
-    name: 'AEM XSC Showcase',
-    siteId: 'nexus-aem-showcase-v2',
+    name: 'XSC Team Site',
+    siteId: 'xscteamsite',
     org: 'AEMXSC',
-    repo: 'nexus-aem-showcase-v2',
+    repo: 'xscteamsite',
     branch: 'main',
     get previewOrigin() { return `https://${this.branch}--${this.repo}--${this.org.toLowerCase()}.aem.page`; },
     get liveOrigin() { return `https://${this.branch}--${this.repo}--${this.org.toLowerCase()}.aem.live`; },
-    description: 'XSC team demo workspace and showcase site',
+    description: 'XSC team default demo site',
     vertical: 'Technology',
     pages: [
       { path: '/index', title: 'Homepage', description: 'XSC showcase landing page' },

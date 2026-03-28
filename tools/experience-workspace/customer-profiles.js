@@ -13,12 +13,12 @@ const STORAGE_KEY = 'ew-active-profile';
 
 export const PROFILES = {
 
-  /* ── AEM XSC Showcase (default demo) ── */
+  /* ── XSC Team Site (default demo) ── */
   'aem-xsc': {
     id: 'aem-xsc',
-    name: 'AEM XSC Showcase',
+    name: 'XSC Team Site',
     orgId: 'AEMXSC',
-    repo: 'nexus-aem-showcase-v2',
+    repo: 'xscteamsite',
     branch: 'main',
     tier: 'AEM CS + EDS',
     env: 'Prod (VA7)',
