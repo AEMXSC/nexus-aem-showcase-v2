@@ -12,6 +12,7 @@ import { buildCustomerContext, getActiveProfile } from './customer-profiles.js';
 import { KNOWN_SITES, resolveSite, listKnownSites, buildKnownSitesPrompt } from './known-sites.js';
 import * as da from './da-client.js';
 import { isSignedIn } from './ims.js';
+import { hasGitHubToken, writeContent as ghWriteContent, triggerPreview as ghTriggerPreview } from './github-content.js';
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-20250514';
@@ -1095,38 +1096,44 @@ async function executeTool(name, input) {
       const previewUrl = `${baseUrl}${pagePath}`;
       const daUrl = `https://da.live/edit#/${org}/${repo}${pagePath}`;
 
-      // ── Local content write (AEMCoder pattern) ──
-      // Write to local content/ folder for persistence (git-pushable),
-      // then show decorated preview via srcdoc with site CSS/JS from aem.page.
-      const CONTENT_API = 'http://localhost:3001';
-      let localWriteOk = false;
-      try {
-        const apiPath = htmlPath.startsWith('/') ? htmlPath.slice(1) : htmlPath;
-        const resp = await fetch(`${CONTENT_API}/api/content/${apiPath}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ html: input.html }),
-        });
-        localWriteOk = resp.ok;
-        if (!resp.ok) console.warn('[edit_page_content] Content API:', resp.status);
-      } catch (localErr) {
-        console.warn('[edit_page_content] Local write failed:', localErr.message);
-      }
+      // ── GitHub write (AEMCoder pattern) ──
+      // Write directly to DA's backing GitHub repo via GitHub Contents API.
+      // The GitHub PAT is the only credential needed — no IMS, no DA auth.
+      if (hasGitHubToken()) {
+        try {
+          const result = await ghWriteContent(org, repo, pagePath, input.html, null, branch);
+          console.log('[edit_page_content] GitHub write:', result.commitSha);
 
-      // Return with preview HTML — app.js renders via srcdoc with full EDS decoration
-      if (localWriteOk) {
-        return JSON.stringify({
-          status: 'written',
-          page_path: pagePath,
-          content_length: input.html.length,
-          preview_url: previewUrl,
-          da_edit_url: daUrl,
-          message: `Content saved to ${pagePath}. Preview updated.${!isSignedIn() ? ' Push to git to publish live.' : ''}`,
-          _action: 'local_write',
-          _preview_path: pagePath,
-          _preview_html: input.html,
-          _preview_base: baseUrl,
-        }, null, 2);
+          // Try to trigger AEM preview (may fail for DA sites — that's OK)
+          let previewStatus = 'skipped';
+          if (input.trigger_preview !== false) {
+            try {
+              const pResult = await ghTriggerPreview(org, repo, branch, pagePath);
+              previewStatus = pResult.ok ? 'success' : `pending (${pResult.status})`;
+            } catch {
+              previewStatus = 'pending';
+            }
+          }
+
+          return JSON.stringify({
+            status: 'written',
+            page_path: pagePath,
+            content_length: input.html.length,
+            commit: result.commitSha,
+            github_url: result.htmlUrl,
+            preview_url: previewUrl,
+            da_edit_url: daUrl,
+            preview_status: previewStatus,
+            message: `Content committed to ${org}/${repo}${htmlPath}. Preview updating.`,
+            _action: 'local_write',
+            _preview_path: pagePath,
+            _preview_html: input.html,
+            _preview_base: baseUrl,
+          }, null, 2);
+        } catch (ghErr) {
+          console.warn('[edit_page_content] GitHub write failed:', ghErr.message);
+          // Fall through to DA or srcdoc fallback
+        }
       }
 
       // ── DA write fallback (if signed in) ──
@@ -1168,7 +1175,7 @@ async function executeTool(name, input) {
         base_url: baseUrl,
         preview_url: previewUrl,
         da_edit_url: daUrl,
-        message: `Content rendered in preview for ${pagePath}. Local content API not available — preview is ephemeral.`,
+        message: `Content rendered in preview for ${pagePath}. Add a GitHub token in Settings for persistent writes.`,
         _action: 'local_preview',
         _preview_path: pagePath,
         _preview_html: input.html,

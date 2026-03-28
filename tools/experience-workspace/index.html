@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Experience Workspace</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e34850'><path d='M12 2L2 7l10 5 10-5-10-5z'/><path d='M2 17l10 5 10-5'/><path d='M2 12l10 5 10-5'/></svg>">
-  <link rel="stylesheet" href="app.css?v=23">
+  <link rel="stylesheet" href="app.css?v=24">
 </head>
 <body>
   <div class="workspace">
@@ -83,13 +83,24 @@
         <input type="password" id="claudeKeyInput" class="settings-input" placeholder="sk-ant-...">
         <div class="settings-hint">Enables real AI chat, governance analysis, and brief processing</div>
 
+        <label class="settings-label" style="margin-top:16px">GitHub Token (PAT)</label>
+        <div class="settings-token-row">
+          <input type="password" id="githubTokenInput" class="settings-input" placeholder="ghp_...">
+          <button class="settings-token-btn" id="githubTokenBtn" title="Set token">Set</button>
+        </div>
+        <div class="settings-hint">
+          GitHub Personal Access Token for reading/writing content. This is the primary auth method.
+          <a href="https://github.com/settings/tokens" target="_blank" class="settings-link">Create a PAT</a>
+        </div>
+        <div class="settings-token-status" id="githubTokenStatus"></div>
+
         <label class="settings-label" style="margin-top:16px">Adobe IMS Token</label>
         <div class="settings-token-row">
           <input type="password" id="imsTokenInput" class="settings-input" placeholder="eyJhbGci...">
           <button class="settings-token-btn" id="imsTokenBtn" title="Paste token">Set</button>
         </div>
         <div class="settings-hint">
-          Paste your IMS token to enable DA content editing.
+          Paste your IMS token to enable DA content editing (fallback).
           <a href="#" id="imsTokenHelp" class="settings-link">How to get your token</a>
         </div>
         <div class="settings-token-status" id="imsTokenStatus"></div>
@@ -447,6 +458,6 @@
   <!-- Mammoth.js for DOCX text extraction -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 
-  <script src="app.js?v=23" type="module"></script>
+  <script src="app.js?v=24" type="module"></script>
 </body>
 </html>

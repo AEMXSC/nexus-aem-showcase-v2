@@ -9,13 +9,14 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken, relaySignIn, getBookmarkletCode } from './ims.js?v=23';
-import * as ai from './ai.js?v=23';
-import { TOOL_AGENT_MAP } from './ai.js?v=23';
-import * as da from './da-client.js?v=23';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken, relaySignIn, getBookmarkletCode } from './ims.js?v=24';
+import * as ai from './ai.js?v=24';
+import { TOOL_AGENT_MAP } from './ai.js?v=24';
+import * as da from './da-client.js?v=24';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
+import { getGitHubToken, setGitHubToken, hasGitHubToken } from './github-content.js';
 
 /* ── Dynamic Org Configuration (from customer profile) ── */
 let AEM_ORG = getOrgConfig();
@@ -168,13 +169,14 @@ function updateAuthUI() {
 
   if (authStatus) {
     const parts = [];
+    if (hasGitHubToken()) parts.push('GitHub ✓');
     if (signedIn) parts.push('Adobe ✓');
     if (hasKey) parts.push('AI ✓');
     authStatus.textContent = parts.length > 0 ? parts.join(' · ') : '';
     authStatus.style.display = parts.length > 0 ? '' : 'none';
   }
 
-  isLiveMode = signedIn || hasKey;
+  isLiveMode = signedIn || hasKey || hasGitHubToken();
 
   // Update connection status
   const statusDot = document.querySelector('.status-dot');
@@ -198,6 +200,17 @@ function toggleSettings() {
   if (keyInput && ai.hasApiKey()) {
     keyInput.value = ai.getApiKey().slice(0, 8) + '...';
   }
+  // Show GitHub token status
+  const ghInput = document.getElementById('githubTokenInput');
+  const ghStatus = document.getElementById('githubTokenStatus');
+  const existingGhToken = getGitHubToken();
+  if (ghInput && existingGhToken) {
+    ghInput.value = existingGhToken.slice(0, 12) + '...';
+    if (ghStatus) {
+      ghStatus.textContent = 'Token set — GitHub content editing enabled';
+      ghStatus.className = 'settings-token-status success';
+    }
+  }
   // Show IMS token status
   const imsInput = document.getElementById('imsTokenInput');
   const imsStatus = document.getElementById('imsTokenStatus');
@@ -205,7 +218,7 @@ function toggleSettings() {
   if (imsInput && existingToken) {
     imsInput.value = existingToken.slice(0, 12) + '...';
     if (imsStatus) {
-      imsStatus.textContent = 'Token set — DA editing enabled';
+      imsStatus.textContent = 'Token set — DA editing enabled (fallback)';
       imsStatus.className = 'settings-token-status success';
     }
   }
@@ -238,6 +251,57 @@ function saveSettings() {
   }
   toggleSettings();
   updateAuthUI();
+}
+
+/* ── GitHub Token paste ── */
+const githubTokenBtn = document.getElementById('githubTokenBtn');
+const githubTokenInput = document.getElementById('githubTokenInput');
+const githubTokenStatus = document.getElementById('githubTokenStatus');
+
+if (githubTokenBtn && githubTokenInput) {
+  githubTokenBtn.addEventListener('click', async () => {
+    const token = githubTokenInput.value.trim();
+    if (!token || token.endsWith('...')) return;
+
+    githubTokenStatus.textContent = 'Validating...';
+    githubTokenStatus.className = 'settings-token-status';
+
+    try {
+      // Validate by fetching the authenticated user
+      const resp = await fetch('https://api.github.com/user', {
+        headers: {
+          Authorization: `token ${token}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (resp.ok) {
+        const user = await resp.json();
+        setGitHubToken(token);
+        githubTokenInput.value = token.slice(0, 12) + '...';
+        githubTokenStatus.textContent = `Authenticated as ${user.login} — content editing enabled!`;
+        githubTokenStatus.className = 'settings-token-status success';
+        updateAuthUI();
+      } else if (resp.status === 401) {
+        githubTokenStatus.textContent = 'Token invalid or expired (401). Create a new PAT.';
+        githubTokenStatus.className = 'settings-token-status error';
+      } else {
+        // Non-401 — store it anyway
+        setGitHubToken(token);
+        githubTokenInput.value = token.slice(0, 12) + '...';
+        githubTokenStatus.textContent = `Token set (GitHub returned ${resp.status}). Try editing a page.`;
+        githubTokenStatus.className = 'settings-token-status success';
+        updateAuthUI();
+      }
+    } catch (err) {
+      // Network error — store token anyway
+      setGitHubToken(token);
+      githubTokenInput.value = token.slice(0, 12) + '...';
+      githubTokenStatus.textContent = 'Token saved (could not validate). Try editing a page.';
+      githubTokenStatus.className = 'settings-token-status success';
+      updateAuthUI();
+    }
+  });
 }
 
 /* ── IMS Token paste ── */
@@ -3424,7 +3488,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v23 — fix DOCX/PDF uploads (mammoth.js + Claude native docs)');
+  console.log('[EW] init v24 — GitHub PAT auth + content writes (AEMCoder pattern)');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {
