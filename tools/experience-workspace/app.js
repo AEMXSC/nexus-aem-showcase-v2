@@ -9,10 +9,10 @@
  * 5. Speed of iteration (update system prompts same day, not next quarter)
  */
 
-import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=17';
-import * as ai from './ai.js?v=17';
-import { TOOL_AGENT_MAP } from './ai.js?v=17';
-import * as da from './da-client.js?v=17';
+import { loadIms, isSignedIn, signIn, signOut, getProfile, getToken } from './ims.js?v=18';
+import * as ai from './ai.js?v=18';
+import { TOOL_AGENT_MAP } from './ai.js?v=18';
+import * as da from './da-client.js?v=18';
 import * as gov from './governance.js';
 import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
@@ -37,6 +37,7 @@ const viewEditor = document.getElementById('viewEditor');
 const editorToolbar = document.getElementById('editorToolbar');
 const panels = document.getElementById('panels');
 const resourcesTree = document.getElementById('resourcesTree');
+const fileTreeEl = document.getElementById('fileTree');
 const breadcrumbPage = document.getElementById('breadcrumbPage');
 const previewUrlText = document.getElementById('previewUrlText');
 const previewDot = document.getElementById('previewDot');
@@ -1994,6 +1995,178 @@ function navigateToPage(path) {
   cachedPageUrl = null;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   FILE TREE — DA repository browser via MCP / admin.da.live
+   ══════════════════════════════════════════════════════════════ */
+
+let fileTreeLoaded = false;
+let activeResourceTab = 'pages'; // 'pages' | 'files'
+
+/** SVG icons for the file tree */
+const FT_ICONS = {
+  chevron: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="9 18 15 12 9 6"/></svg>',
+  folder: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>',
+  file: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  html: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="8 13 10 15 8 17"/><line x1="14" y1="15" x2="16" y2="15"/></svg>',
+  json: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2m4 0h2M10 17h4"/></svg>',
+  js: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><text x="8" y="18" font-size="7" fill="currentColor" stroke="none" font-weight="bold">JS</text></svg>',
+  css: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13l2 2-2 2m4-1h2"/></svg>',
+};
+
+function getFileIcon(name, isDir) {
+  if (isDir) return FT_ICONS.folder;
+  const ext = name.split('.').pop().toLowerCase();
+  if (ext === 'html') return FT_ICONS.html;
+  if (ext === 'json') return FT_ICONS.json;
+  if (ext === 'js') return FT_ICONS.js;
+  if (ext === 'css') return FT_ICONS.css;
+  return FT_ICONS.file;
+}
+
+/** Fetch directory listing from DA */
+async function fetchDADirectory(path) {
+  try {
+    const items = await da.listPages(path);
+    if (!Array.isArray(items)) return [];
+    // Sort: folders first, then files, alphabetical
+    return items.sort((a, b) => {
+      const aDir = !a.ext;
+      const bDir = !b.ext;
+      if (aDir !== bDir) return aDir ? -1 : 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  } catch (err) {
+    console.warn('[FileTree] Failed to list', path, err.message);
+    return [];
+  }
+}
+
+/** Render a single tree node (folder or file) */
+function createTreeNode(item, parentPath, depth) {
+  const isDir = !item.ext;
+  const name = item.name || item.path?.split('/').pop() || '?';
+  const fullPath = `${parentPath === '/' ? '' : parentPath}/${name}${item.ext ? `.${item.ext}` : ''}`;
+  const paddingLeft = 10 + depth * 16;
+
+  const node = document.createElement('div');
+  node.className = 'ft-node';
+
+  const row = document.createElement('div');
+  row.className = 'ft-item';
+  row.style.paddingLeft = `${paddingLeft}px`;
+
+  const chevron = document.createElement('span');
+  chevron.className = `ft-chevron${isDir ? '' : ' hidden'}`;
+  chevron.innerHTML = FT_ICONS.chevron;
+
+  const icon = document.createElement('span');
+  icon.className = `ft-icon ${isDir ? 'folder' : 'file'}`;
+  icon.innerHTML = getFileIcon(name + (item.ext ? `.${item.ext}` : ''), isDir);
+
+  const label = document.createElement('span');
+  label.className = 'ft-name';
+  label.textContent = isDir ? name : `${name}${item.ext ? `.${item.ext}` : ''}`;
+
+  row.appendChild(chevron);
+  row.appendChild(icon);
+  row.appendChild(label);
+  node.appendChild(row);
+
+  if (isDir) {
+    const children = document.createElement('div');
+    children.className = 'ft-children';
+    node.appendChild(children);
+
+    let loaded = false;
+    row.addEventListener('click', async () => {
+      const isOpen = children.classList.contains('open');
+      if (isOpen) {
+        children.classList.remove('open');
+        chevron.classList.remove('open');
+        return;
+      }
+
+      chevron.classList.add('open');
+      children.classList.add('open');
+
+      if (!loaded) {
+        children.innerHTML = '<div class="ft-loading">Loading...</div>';
+        const items = await fetchDADirectory(fullPath);
+        children.innerHTML = '';
+        if (items.length === 0) {
+          children.innerHTML = '<div class="ft-loading">Empty</div>';
+        } else {
+          items.forEach((child) => {
+            children.appendChild(createTreeNode(child, fullPath, depth + 1));
+          });
+        }
+        loaded = true;
+      }
+    });
+  } else {
+    // File click — navigate to it in preview if it's HTML, or open in DA
+    row.addEventListener('click', () => {
+      const ext = item.ext?.toLowerCase();
+      if (ext === 'html') {
+        const pagePath = fullPath.replace(/\.html$/, '');
+        navigateToPage(pagePath);
+      } else {
+        // Open in DA for non-HTML files
+        const daUrl = `https://da.live/edit#/${DA_ORG_REF()}/${DA_REPO_REF()}${fullPath}`;
+        window.open(daUrl, '_blank');
+      }
+    });
+  }
+
+  return node;
+}
+
+/** Helper refs for current org/repo (avoids circular import issues) */
+function DA_ORG_REF() { return da.getOrg(); }
+function DA_REPO_REF() { return da.getRepo(); }
+
+/** Load the root of the file tree */
+async function loadFileTree() {
+  if (!fileTreeEl) return;
+  fileTreeEl.innerHTML = '<div class="resources-loading">Loading files...</div>';
+
+  const items = await fetchDADirectory('/');
+  fileTreeEl.innerHTML = '';
+
+  if (items.length === 0) {
+    fileTreeEl.innerHTML = '<div class="resources-empty">No files found. Sign in to browse DA content.</div>';
+    return;
+  }
+
+  items.forEach((item) => {
+    fileTreeEl.appendChild(createTreeNode(item, '/', 0));
+  });
+
+  fileTreeLoaded = true;
+}
+
+/** Switch between Pages and Files tabs */
+function switchResourceTab(tab) {
+  activeResourceTab = tab;
+  document.querySelectorAll('.resources-tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+
+  if (tab === 'pages') {
+    if (resourcesTree) resourcesTree.style.display = '';
+    if (fileTreeEl) fileTreeEl.style.display = 'none';
+  } else {
+    if (resourcesTree) resourcesTree.style.display = 'none';
+    if (fileTreeEl) fileTreeEl.style.display = '';
+    if (!fileTreeLoaded) loadFileTree();
+  }
+}
+
+// Wire up tab clicks
+document.querySelectorAll('.resources-tab').forEach((tab) => {
+  tab.addEventListener('click', () => switchResourceTab(tab.dataset.tab));
+});
+
 /* ── Connect site: load preview + resources ── */
 function connectSite() {
   const origin = AEM_ORG.previewOrigin;
@@ -2009,6 +2182,10 @@ function connectSite() {
 
   // Load resources tree
   loadResources();
+
+  // Reset file tree so it reloads with new site
+  fileTreeLoaded = false;
+  if (fileTreeEl) fileTreeEl.innerHTML = '<div class="resources-loading">Click Files tab to browse...</div>';
 }
 
 /* ── Connect Custom Site (AEMCoder-style org/repo input) ── */
@@ -2831,7 +3008,7 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v17 — DA MCP integration (mcp.adobeaemcloud.com)');
+  console.log('[EW] init v18 — file tree + DA MCP');
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {

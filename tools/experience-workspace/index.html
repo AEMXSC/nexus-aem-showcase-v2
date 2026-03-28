@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Experience Workspace</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e34850'><path d='M12 2L2 7l10 5 10-5-10-5z'/><path d='M2 17l10 5 10-5'/><path d='M2 12l10 5 10-5'/></svg>">
-  <link rel="stylesheet" href="app.css?v=17">
+  <link rel="stylesheet" href="app.css?v=18">
 </head>
 <body>
   <div class="workspace">
@@ -354,9 +354,17 @@
 
           <!-- Resources Panel -->
           <div class="panel-resources" id="panelResources">
-            <div class="resources-header">RESOURCES</div>
+            <div class="resources-header">
+              <div class="resources-tabs">
+                <button class="resources-tab active" data-tab="pages">Pages</button>
+                <button class="resources-tab" data-tab="files">Files</button>
+              </div>
+            </div>
             <div class="resources-tree" id="resourcesTree">
               <div class="resources-loading">Loading...</div>
+            </div>
+            <div class="file-tree" id="fileTree" style="display:none">
+              <div class="resources-loading">Click to load files...</div>
             </div>
           </div>
 
@@ -370,6 +378,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
-  <script src="app.js?v=17" type="module"></script>
+  <script src="app.js?v=18" type="module"></script>
 </body>
 </html>
