@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Experience Workspace</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e34850'><path d='M12 2L2 7l10 5 10-5-10-5z'/><path d='M2 17l10 5 10-5'/><path d='M2 12l10 5 10-5'/></svg>">
-  <link rel="stylesheet" href="app.css?v=9">
+  <link rel="stylesheet" href="app.css?v=10">
 </head>
 <body>
   <div class="workspace">
@@ -163,6 +163,23 @@
           <!-- Tagline -->
           <div class="home-tagline">Collaborate. Build. Enhance. Ship.</div>
 
+          <!-- Connect Site -->
+          <div class="connect-site" id="connectSite">
+            <div class="connect-site-label">Connect your site</div>
+            <div class="connect-site-row">
+              <div class="connect-site-input-wrap">
+                <svg class="connect-site-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+                <input type="text" class="connect-site-input" id="connectSiteInput" placeholder="org/repo  (e.g. AEMXSC/nexus-aem-showcase-v2)" autocomplete="off">
+                <button class="connect-site-btn" id="connectSiteBtn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  Connect
+                </button>
+              </div>
+              <div class="connect-site-status" id="connectSiteStatus"></div>
+            </div>
+            <div class="connect-site-hint">Enter a GitHub org/repo to load an Edge Delivery Services site</div>
+          </div>
+
           <!-- 3 Cards (SpellForge style) -->
           <div class="home-cards">
             <div class="home-card" data-flow="brief">
@@ -269,8 +286,16 @@
                 <span class="preview-url-text" id="previewUrlText">Not connected</span>
               </div>
               <div class="preview-actions">
-                <button class="preview-action-btn" id="editInUEBtn" title="Edit in Universal Editor">
+                <select class="branch-select" id="branchSelect" title="Branch">
+                  <option value="main">main</option>
+                </select>
+                <button class="preview-action-btn preview-action-da" id="editInDABtn" title="Edit in Document Authoring (DA)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  DA
+                </button>
+                <button class="preview-action-btn preview-action-ue" id="editInUEBtn" title="Edit in Universal Editor">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  UE
                 </button>
                 <button class="preview-action-btn" id="refreshPreviewBtn" title="Refresh preview">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
@@ -298,6 +323,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
-  <script src="app.js?v=9" type="module"></script>
+  <script src="app.js?v=10" type="module"></script>
 </body>
 </html>

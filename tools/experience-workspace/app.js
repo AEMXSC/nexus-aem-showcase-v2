@@ -494,6 +494,71 @@ const TOOL_RENDERERS = {
       </div>`;
   },
 
+  /* ─ Experimentation Agent: Experiment Setup Card ─ */
+  setup_experiment(result) {
+    if (result.status !== 'created' && result.status !== 'partial') return null;
+    const variants = result.variants || [];
+    const variantRows = variants.map((v) => `
+      <div class="page-card-variant">
+        <span class="page-card-variant-name">${v.path.split('/').pop()}</span>
+        <span class="page-card-variant-split">${v.split}</span>
+        <span class="page-card-variant-desc">${v.description || ''}</span>
+      </div>
+    `).join('');
+    return `
+      <div class="page-card page-card-live" style="border-left: 3px solid var(--accent)">
+        <div class="page-card-header">
+          <div class="page-card-icon">🧪</div>
+          <div class="page-card-meta">
+            <div class="page-card-title">Experiment: ${result.experiment_name}</div>
+            <div class="page-card-author">Control: ${result.control_page} (${result.control_split}) · ${variants.length} challenger(s)</div>
+          </div>
+        </div>
+        <div style="padding:0 14px 10px;font-size:11px;color:var(--text-secondary)">${variantRows}</div>
+        ${result.preview_overlay ? `<a href="${result.preview_overlay}" target="_blank" rel="noopener" class="page-card-link">Preview experiment overlay →</a>` : ''}
+      </div>`;
+  },
+
+  /* ─ Forms Agent: Form Generated Card ─ */
+  generate_form(result) {
+    if (result.status !== 'generated') return null;
+    const fieldList = (result.fields || []).map((f) => `<span style="background:var(--bg-secondary);padding:2px 6px;border-radius:4px;font-size:10px">${f.label || f.name} (${f.type})</span>`).join(' ');
+    return `
+      <div class="page-card" style="border-left: 3px solid #2d7ff9">
+        <div class="page-card-header">
+          <div class="page-card-icon">📋</div>
+          <div class="page-card-meta">
+            <div class="page-card-title">Form Generated — ${result.field_count} fields</div>
+            <div class="page-card-author">Submit to: ${result.submit_action}</div>
+          </div>
+        </div>
+        <div style="padding:0 14px 10px;display:flex;flex-wrap:wrap;gap:4px">${fieldList}</div>
+      </div>`;
+  },
+
+  /* ─ Content Variations Agent: Variations Card ─ */
+  generate_page_variations(result) {
+    if (result.status !== 'generated') return null;
+    const vars = (result.variations || []).map((v) => `
+      <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600;font-size:12px;color:var(--text-primary)">${v.name} — ${v.tone}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${v.ai_rationale}</div>
+        <div style="font-size:10px;color:var(--accent);margin-top:2px">CTA: ${v.changes?.cta_text || ''}</div>
+      </div>
+    `).join('');
+    return `
+      <div class="page-card" style="border-left: 3px solid var(--green)">
+        <div class="page-card-header">
+          <div class="page-card-icon">✨</div>
+          <div class="page-card-meta">
+            <div class="page-card-title">${result.num_variations} Variations for ${result.source_page}</div>
+            <div class="page-card-author">Audience: ${result.target_audience} · Tone: ${result.tone}</div>
+          </div>
+        </div>
+        <div style="padding:0 14px 10px">${vars}</div>
+      </div>`;
+  },
+
   /* ─ DA Editing Agent: Publish Confirmation ─ */
   publish_page(result) {
     if (result.status !== 'published') return null;
@@ -624,6 +689,26 @@ const TOOL_SUGGESTIONS = {
     { icon: '📊', label: 'Detailed flow runs', prompt: 'Show me detailed flow runs for the destinations with issues' },
     { icon: '🔔', label: 'Alert on issues', prompt: 'Create a support ticket for the destination health issues' },
     { icon: '👥', label: 'Check segments', prompt: 'Show me the audience segments feeding these destinations' },
+  ],
+  setup_experiment: [
+    { icon: '✏️', label: 'Edit challengers', prompt: 'Edit the challenger page content to apply the variation' },
+    { icon: '📊', label: 'Check results', prompt: 'How is the experiment performing? Show me conversion data' },
+    { icon: '🏆', label: 'Pick winner', prompt: 'Analyze the experiment results and recommend a winner' },
+  ],
+  get_experiment_status: [
+    { icon: '🏆', label: 'Pick winner', prompt: 'Based on these results, which variant should we promote?' },
+    { icon: '⏱️', label: 'Extend test', prompt: 'The confidence is low — extend the experiment duration' },
+    { icon: '📋', label: 'Create report', prompt: 'Create a summary report of this experiment for stakeholders' },
+  ],
+  generate_form: [
+    { icon: '📄', label: 'Embed in page', prompt: 'Add this form to the page' },
+    { icon: '✏️', label: 'Add more fields', prompt: 'Add a file upload and department dropdown to the form' },
+    { icon: '🔗', label: 'Set submit action', prompt: 'Configure the form to submit to a REST API endpoint' },
+  ],
+  generate_page_variations: [
+    { icon: '🧪', label: 'Setup A/B test', prompt: 'Create an A/B test with the best two variations' },
+    { icon: '✏️', label: 'Refine variation', prompt: 'Refine Variation A with a more urgent tone' },
+    { icon: '📊', label: 'More variations', prompt: 'Generate 3 more variations with a different audience focus' },
   ],
 };
 
@@ -883,6 +968,10 @@ function formatToolInput(toolName, input) {
     case 'list_destinations': return `${input.status_filter || 'all'}${input.type_filter ? ` (${input.type_filter})` : ''}`;
     case 'list_destination_flow_runs': return `"${input.destination_id || 'all'}"${input.hours ? ` ${input.hours}h` : ''}`;
     case 'get_destination_health': return input.include_flow_details ? 'detailed' : 'summary';
+    case 'setup_experiment': return `"${input.experiment_name || ''}" on ${input.control_page || '/'}`;
+    case 'get_experiment_status': return `"${input.experiment_name || ''}"`;
+    case 'generate_form': return `"${(input.description || '').slice(0, 30)}"`;
+    case 'generate_page_variations': return `"${input.page_path || ''}" × ${input.num_variations || 3}`;
     default: {
       const str = JSON.stringify(input);
       return str.length > 40 ? str.slice(0, 37) + '...' : str;
@@ -1752,6 +1841,115 @@ function connectSite() {
   loadResources();
 }
 
+/* ── Connect Custom Site (AEMCoder-style org/repo input) ── */
+let customSiteConnected = false;
+
+async function connectCustomSite(orgRepo) {
+  const statusEl = document.getElementById('connectSiteStatus');
+  const btn = document.getElementById('connectSiteBtn');
+  if (!statusEl || !btn) return;
+
+  // Parse org/repo
+  const parts = orgRepo.trim().replace(/^https?:\/\/github\.com\//, '').split('/');
+  if (parts.length < 2) {
+    statusEl.textContent = 'Enter org/repo format (e.g., AEMXSC/nexus-aem-showcase-v2)';
+    statusEl.className = 'connect-site-status error';
+    return;
+  }
+
+  const [org, repo] = parts;
+  const branch = 'main';
+  const previewOrigin = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
+
+  // Show loading state
+  statusEl.textContent = `Connecting to ${org}/${repo}...`;
+  statusEl.className = 'connect-site-status loading';
+  btn.disabled = true;
+  btn.classList.add('connecting');
+  btn.innerHTML = '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Connecting...';
+
+  // Validate: ping the site
+  let valid = false;
+  try {
+    const resp = await fetch(previewOrigin, { mode: 'no-cors' });
+    valid = true; // no-cors won't give us status, but if it doesn't throw, the host exists
+  } catch {
+    // Try with cors
+    try {
+      const resp = await fetch(`${previewOrigin}/`, { mode: 'cors' });
+      valid = resp.ok || resp.type === 'opaque';
+    } catch {
+      valid = false;
+    }
+  }
+
+  // Even if fetch was opaque, try to load query-index to confirm it's EDS
+  if (valid) {
+    try {
+      const qiResp = await fetch(`${previewOrigin}/query-index.json`);
+      if (qiResp.ok) {
+        valid = true;
+      }
+    } catch {
+      // Still might be valid even without query-index
+    }
+  }
+
+  // Always accept the connection (demo-friendly — even if ping fails, the iframe will show the error)
+  // In a real product you'd validate more strictly
+
+  // Update the org config dynamically
+  AEM_ORG = {
+    ...AEM_ORG,
+    name: `${org}/${repo}`,
+    orgId: org,
+    repo,
+    branch,
+    previewOrigin,
+    liveOrigin: `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.live`,
+  };
+  PREVIEW_URL = previewOrigin + '/';
+  customSiteConnected = true;
+
+  // Reconfigure DA client
+  da.configure({ org, repo, branch });
+
+  // Update UI
+  statusEl.textContent = `Connected to ${org}/${repo}`;
+  statusEl.className = 'connect-site-status success';
+  btn.disabled = false;
+  btn.classList.remove('connecting');
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Connected';
+
+  // Update home badge
+  if (homeSiteName) homeSiteName.textContent = `${org}/${repo}`;
+  if (homeSiteUrl) homeSiteUrl.textContent = previewOrigin.replace(/^https?:\/\//, '');
+
+  // Switch to editor and load
+  activeResourcePath = null;
+  cachedPageHTML = null;
+  cachedPageUrl = null;
+
+  // Small delay for visual feedback, then switch to editor
+  await sleep(600);
+
+  switchView('editor');
+  navigateToPage('/');
+  loadResources();
+
+  // Populate branch select
+  const branchSelect = document.getElementById('branchSelect');
+  if (branchSelect) {
+    branchSelect.innerHTML = `<option value="main">main</option>`;
+  }
+
+  // Welcome message in chat
+  addMessage('assistant', md(`**Connected to ${org}/${repo}**\nSite loaded in preview. Page tree populated from query-index.json. You can now:\n- **Prompt to edit**: "Change the hero headline on /coffee"\n- **Set up experiments**: "A/B test the hero on the homepage"\n- **Generate variations**: "Create 3 hero variations targeting millennials"\n- **Add forms**: "Add a contact form to /contact"\n- **Edit visually**: Use the DA or UE buttons in the toolbar`));
+
+  // Clear conversation for fresh start
+  conversationHistory = [];
+}
+
 /* ── Preview (hidden iframe for page context) ── */
 function loadPreview() {
   navigateToPage(activeResourcePath || '/');
@@ -1807,7 +2005,7 @@ function matchSpecializedFlow(text) {
   if (lower.includes('governance') || lower.includes('compliance') || lower.includes('scan all')
       || lower.includes('scan page') || lower.includes('run scan')) return runGovernance;
   if (lower.includes('perform') || lower.includes('analytics') || lower.includes('bounce')) return runPerformanceFlow;
-  if (lower.includes('personal') || lower.includes('segment') || lower.includes('variant')) return runPersonalizeFlow;
+  if (lower.includes('personal') || lower.includes('segment')) return runPersonalizeFlow;
   if (lower.includes('workfront') || lower.includes('project health') || lower.includes('project status')) return runWorkfrontPanel;
   if (lower.includes('mcp') || lower.includes('services') || lower.includes('entitlement') || lower.includes('connected services')) return runServicesPanel;
   if (lower.includes('block') || lower.includes('library') || lower.includes('catalog') || lower.includes('component')) return runBlockLibrary;
@@ -2010,6 +2208,47 @@ if (homePromptInput) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendHomePrompt(); }
   });
   if (homePromptSend) homePromptSend.addEventListener('click', sendHomePrompt);
+}
+
+// Connect site input
+const connectSiteInput = document.getElementById('connectSiteInput');
+const connectSiteBtn = document.getElementById('connectSiteBtn');
+if (connectSiteInput) {
+  connectSiteInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); connectCustomSite(connectSiteInput.value); }
+  });
+}
+if (connectSiteBtn) {
+  connectSiteBtn.addEventListener('click', () => {
+    const val = document.getElementById('connectSiteInput')?.value;
+    if (val) connectCustomSite(val);
+  });
+}
+
+// Edit in DA button
+const editInDABtn = document.getElementById('editInDABtn');
+if (editInDABtn) {
+  editInDABtn.addEventListener('click', () => {
+    const path = activeResourcePath || '/';
+    const daUrl = `https://da.live/edit#/${AEM_ORG.orgId}/${AEM_ORG.repo}${path}`;
+    window.open(daUrl, '_blank');
+  });
+}
+
+// Branch picker
+const branchSelect = document.getElementById('branchSelect');
+if (branchSelect) {
+  branchSelect.addEventListener('change', () => {
+    const branch = branchSelect.value;
+    AEM_ORG = { ...AEM_ORG, branch };
+    AEM_ORG.previewOrigin = `https://${branch}--${AEM_ORG.repo.toLowerCase()}--${AEM_ORG.orgId.toLowerCase()}.aem.page`;
+    AEM_ORG.liveOrigin = `https://${branch}--${AEM_ORG.repo.toLowerCase()}--${AEM_ORG.orgId.toLowerCase()}.aem.live`;
+    PREVIEW_URL = AEM_ORG.previewOrigin + '/';
+    da.configure({ org: AEM_ORG.orgId, repo: AEM_ORG.repo, branch });
+    navigateToPage(activeResourcePath || '/');
+    loadResources();
+    showToast(`Switched to branch: ${branch}`, 'info');
+  });
 }
 
 // Breadcrumb "Home" click → return to home view

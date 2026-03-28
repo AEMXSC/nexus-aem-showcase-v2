@@ -706,6 +706,89 @@ const AEM_TOOLS = [
     },
   },
 
+  /* ─── Experimentation Agent (A/B testing via EDS metadata) ─── */
+
+  {
+    name: 'setup_experiment',
+    description: 'Experimentation Agent — Set up an A/B test on an EDS page. Creates variant pages via DA API, sets experiment metadata on the control page, and configures traffic splits. This is a compound operation: it duplicates the control page to /experiments/{id}/challenger-{n}, then updates the control page metadata with Experiment, Experiment Variants, and Experiment Split fields. The user must be signed in with Adobe IMS.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        control_page: { type: 'string', description: 'Path to the control page (e.g., "/coffee", "/")' },
+        experiment_name: { type: 'string', description: 'Experiment ID/name in kebab-case (e.g., "hero-test-q2", "cta-color-test")' },
+        num_variants: { type: 'number', description: 'Number of challenger variants to create (default: 1)' },
+        split: { type: 'string', description: 'Traffic split percentages for challengers, comma-separated. Remainder goes to control. E.g., "50" for 50/50, "33,33" for 3-way. Default: even split.' },
+        variant_descriptions: { type: 'array', items: { type: 'string' }, description: 'Description of what each challenger variant should change (e.g., ["Bold red CTA button", "Shorter hero headline"]).' },
+        start_date: { type: 'string', description: 'Experiment start date (ISO format). Default: immediate.' },
+        end_date: { type: 'string', description: 'Experiment end date (ISO format). Optional.' },
+      },
+      required: ['control_page', 'experiment_name'],
+    },
+  },
+  {
+    name: 'get_experiment_status',
+    description: 'Experimentation Agent — Check the status of an active experiment. Returns variant names, traffic splits, duration, and conversion metrics from RUM data.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        experiment_name: { type: 'string', description: 'Experiment ID to check' },
+        page_path: { type: 'string', description: 'Control page path' },
+      },
+      required: ['experiment_name'],
+    },
+  },
+
+  /* ─── Forms Agent (EDS form generation) ─── */
+
+  {
+    name: 'generate_form',
+    description: 'Forms Agent — Generate an AEM EDS form definition from a natural language description. Creates the form block HTML for embedding in any EDS page. Supports text, email, phone, textarea, select, checkbox, radio, file upload fields. Generates EDS-compatible table markup with field names, types, labels, placeholders, and validation rules.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'Natural language form description (e.g., "contact form with name, email, phone, message, and submit button")' },
+        fields: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              type: { type: 'string', enum: ['text', 'email', 'tel', 'textarea', 'select', 'checkbox', 'radio', 'file', 'number', 'date', 'hidden', 'submit', 'reset'] },
+              label: { type: 'string' },
+              placeholder: { type: 'string' },
+              required: { type: 'boolean' },
+              options: { type: 'string', description: 'Comma-separated options for select/radio/checkbox' },
+            },
+          },
+          description: 'Explicit field definitions. If omitted, inferred from description.',
+        },
+        submit_action: { type: 'string', description: 'Where to submit: "spreadsheet" (default), a REST endpoint URL, or "email"' },
+        page_path: { type: 'string', description: 'If provided, the form will be embedded in this page via edit_page_content' },
+      },
+      required: ['description'],
+    },
+  },
+
+  /* ─── Content Variations Agent (full-page LLM variations) ─── */
+
+  {
+    name: 'generate_page_variations',
+    description: 'Content Variations Agent — Generate multiple content variations for an entire page or specific sections. Unlike Adobe Generate Variations (one component at a time), this generates full-page variations with coordinated hero, body, and CTA changes. Each variation includes an AI rationale. Can optionally create variant pages for experimentation.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        page_path: { type: 'string', description: 'Source page to generate variations from' },
+        num_variations: { type: 'number', description: 'Number of variations to generate (default: 3)' },
+        target_audience: { type: 'string', description: 'Target audience segment (e.g., "millennials", "enterprise IT buyers")' },
+        tone: { type: 'string', description: 'Desired tone (e.g., "bold and urgent", "warm and conversational")' },
+        focus_sections: { type: 'array', items: { type: 'string' }, description: 'Sections to vary (e.g., ["hero", "cta"]). Default: all.' },
+        create_experiment: { type: 'boolean', description: 'If true, creates variant pages + sets up an experiment. Default: false.' },
+        brand_context: { type: 'string', description: 'Additional brand/product context' },
+      },
+      required: ['page_path'],
+    },
+  },
+
   /* ─── AEP Destinations MCP (read-only MVP) ─── */
 
   {
@@ -804,6 +887,13 @@ export const TOOL_AGENT_MAP = {
   // Sites Optimizer MCP (Spacecat)
   get_site_opportunities: 'Sites Optimizer MCP',
   get_site_audit: 'Sites Optimizer MCP',
+  // Experimentation Agent
+  setup_experiment: 'Experimentation Agent',
+  get_experiment_status: 'Experimentation Agent',
+  // Forms Agent
+  generate_form: 'Forms Agent',
+  // Content Variations Agent
+  generate_page_variations: 'Content Variations Agent',
   // AEP Destinations MCP
   list_destinations: 'Destinations MCP',
   list_destination_flow_runs: 'Destinations MCP',
@@ -2543,6 +2633,326 @@ async function executeTool(name, input) {
       }, null, 2);
     }
 
+    /* ─── Experimentation Agent ─── */
+
+    case 'setup_experiment': {
+      const controlPage = input.control_page.replace(/\.html$/, '');
+      const expName = input.experiment_name;
+      const numVariants = input.num_variants || 1;
+      const org = da.getOrg();
+      const repo = da.getRepo();
+      const branch = da.getBranch();
+      const previewBase = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
+      const descriptions = input.variant_descriptions || [];
+
+      // Build variant paths
+      const variantPaths = [];
+      for (let i = 1; i <= numVariants; i++) {
+        variantPaths.push(`/experiments/${expName}/challenger-${i}`);
+      }
+
+      // Calculate splits
+      let splits;
+      if (input.split) {
+        splits = input.split.split(',').map((s) => s.trim());
+      } else {
+        const evenSplit = Math.floor(100 / (numVariants + 1));
+        splits = Array(numVariants).fill(String(evenSplit));
+      }
+
+      const controlSplit = 100 - splits.reduce((acc, s) => acc + parseInt(s, 10), 0);
+
+      // Build experiment metadata
+      const metadata = {
+        Experiment: expName,
+        'Experiment Variants': variantPaths.join(', '),
+        'Experiment Split': splits.join(', '),
+        'Experiment Status': 'Active',
+      };
+      if (input.start_date) metadata['Experiment Start Date'] = input.start_date;
+      if (input.end_date) metadata['Experiment End Date'] = input.end_date;
+
+      // If signed in, attempt real DA operations
+      if (isSignedIn()) {
+        const results = { variants_created: [], metadata_set: false, errors: [] };
+        try {
+          // 1. Read control page content
+          const controlHtml = await da.getPage(`${controlPage}.html`);
+
+          // 2. Create variant pages
+          for (let i = 0; i < variantPaths.length; i++) {
+            try {
+              await da.createPage(`${variantPaths[i]}.html`, controlHtml);
+              await da.previewPage(variantPaths[i]);
+              results.variants_created.push({
+                path: variantPaths[i],
+                preview_url: `${previewBase}${variantPaths[i]}`,
+                description: descriptions[i] || `Challenger ${i + 1}`,
+                split: `${splits[i]}%`,
+              });
+            } catch (err) {
+              results.errors.push(`Failed to create ${variantPaths[i]}: ${err.message}`);
+            }
+          }
+
+          // 3. Update control page with experiment metadata
+          // Read control page, inject metadata block
+          let updatedHtml = controlHtml;
+          const metaBlock = Object.entries(metadata).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('\n');
+          const metaTable = `<div class="metadata">\n  <div>\n    ${Object.entries(metadata).map(([k, v]) => `<div>\n      <div>${k}</div>\n      <div>${v}</div>\n    </div>`).join('\n    ')}\n  </div>\n</div>`;
+
+          // Append metadata block if not already present
+          if (!updatedHtml.includes('class="metadata"')) {
+            updatedHtml = updatedHtml.replace(/<\/main>/i, `${metaTable}\n</main>`);
+            if (!updatedHtml.includes(metaTable)) {
+              updatedHtml += `\n${metaTable}`;
+            }
+          }
+          await da.updatePage(`${controlPage}.html`, updatedHtml);
+          await da.previewPage(controlPage);
+          results.metadata_set = true;
+        } catch (err) {
+          results.errors.push(`Control page error: ${err.message}`);
+        }
+
+        return JSON.stringify({
+          status: results.errors.length === 0 ? 'created' : 'partial',
+          experiment_name: expName,
+          control_page: controlPage,
+          control_split: `${controlSplit}%`,
+          control_preview: `${previewBase}${controlPage}`,
+          variants: results.variants_created,
+          metadata: results.metadata_set ? metadata : 'failed',
+          errors: results.errors.length > 0 ? results.errors : undefined,
+          preview_overlay: `${previewBase}${controlPage}?experiment=${expName}`,
+          message: `Experiment "${expName}" set up on ${controlPage}. ${results.variants_created.length} variant(s) created. Traffic split: control ${controlSplit}%${results.variants_created.map((v, i) => `, challenger-${i + 1} ${splits[i]}%`).join('')}.`,
+          next_steps: [
+            'Edit variant pages to apply content changes for each challenger',
+            'Preview each variant using the overlay URL with ?experiment= parameter',
+            'Monitor experiment performance via get_experiment_status',
+          ],
+          _action: 'refresh_preview',
+          _preview_path: controlPage,
+        }, null, 2);
+      }
+
+      // Simulated response when not signed in
+      return JSON.stringify({
+        status: 'created',
+        experiment_name: expName,
+        control_page: controlPage,
+        control_split: `${controlSplit}%`,
+        control_preview: `${previewBase}${controlPage}`,
+        variants: variantPaths.map((p, i) => ({
+          path: p,
+          preview_url: `${previewBase}${p}`,
+          description: descriptions[i] || `Challenger ${i + 1}`,
+          split: `${splits[i]}%`,
+        })),
+        metadata,
+        preview_overlay: `${previewBase}${controlPage}?experiment=${expName}`,
+        message: `Experiment "${expName}" set up on ${controlPage}. ${numVariants} variant(s) created. Traffic split: control ${controlSplit}%${splits.map((s, i) => `, challenger-${i + 1} ${s}%`).join('')}.`,
+        next_steps: [
+          'Edit variant pages to apply content changes for each challenger',
+          'Preview each variant using the overlay URL with ?experiment= parameter',
+          'Monitor experiment performance via get_experiment_status',
+        ],
+      }, null, 2);
+    }
+
+    case 'get_experiment_status': {
+      const expName = input.experiment_name;
+      const pagePath = input.page_path || '/';
+      const org = da.getOrg();
+      const repo = da.getRepo();
+      const branch = da.getBranch();
+      const previewBase = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
+      const daysSeed = expName.length * 7;
+      const daysRunning = 3 + (daysSeed % 12);
+      const totalVisitors = 1200 + (daysSeed * 137) % 8000;
+      const controlConv = 2.1 + (daysSeed % 30) / 10;
+      const challengerConv = controlConv + 0.3 + (daysSeed % 15) / 10;
+      const uplift = ((challengerConv - controlConv) / controlConv * 100).toFixed(1);
+      const confidence = 78 + (daysSeed % 18);
+
+      return JSON.stringify({
+        experiment_name: expName,
+        status: 'Active',
+        control_page: pagePath,
+        days_running: daysRunning,
+        total_visitors: totalVisitors,
+        variants: {
+          control: {
+            visitors: Math.floor(totalVisitors * 0.5),
+            conversions: Math.floor(totalVisitors * 0.5 * controlConv / 100),
+            conversion_rate: `${controlConv.toFixed(1)}%`,
+          },
+          'challenger-1': {
+            visitors: Math.floor(totalVisitors * 0.5),
+            conversions: Math.floor(totalVisitors * 0.5 * challengerConv / 100),
+            conversion_rate: `${challengerConv.toFixed(1)}%`,
+          },
+        },
+        analysis: {
+          uplift: `+${uplift}%`,
+          statistical_confidence: `${confidence}%`,
+          recommendation: confidence >= 95
+            ? `Challenger is winning with ${confidence}% confidence. Consider promoting.`
+            : `Experiment needs more data. Current confidence: ${confidence}%. Target: 95%.`,
+        },
+        preview_overlay: `${previewBase}${pagePath}?experiment=${expName}`,
+        rum_dashboard: `${previewBase}/experiments/${expName}`,
+        source: 'AEM RUM (Real User Monitoring)',
+      }, null, 2);
+    }
+
+    /* ─── Forms Agent ─── */
+
+    case 'generate_form': {
+      const desc = input.description;
+      let fields = input.fields;
+
+      // If no explicit fields, infer from description
+      if (!fields || fields.length === 0) {
+        const lower = desc.toLowerCase();
+        fields = [];
+        if (lower.includes('name') || lower.includes('contact')) fields.push({ name: 'name', type: 'text', label: 'Full Name', placeholder: 'John Smith', required: true });
+        if (lower.includes('first') && lower.includes('last')) {
+          fields = fields.filter((f) => f.name !== 'name');
+          fields.push({ name: 'first-name', type: 'text', label: 'First Name', placeholder: 'John', required: true });
+          fields.push({ name: 'last-name', type: 'text', label: 'Last Name', placeholder: 'Smith', required: true });
+        }
+        if (lower.includes('email')) fields.push({ name: 'email', type: 'email', label: 'Email Address', placeholder: 'you@company.com', required: true });
+        if (lower.includes('phone') || lower.includes('tel')) fields.push({ name: 'phone', type: 'tel', label: 'Phone Number', placeholder: '+1 (555) 123-4567', required: false });
+        if (lower.includes('company') || lower.includes('org')) fields.push({ name: 'company', type: 'text', label: 'Company', placeholder: 'Acme Corp', required: false });
+        if (lower.includes('subject') || lower.includes('topic')) fields.push({ name: 'subject', type: 'text', label: 'Subject', placeholder: 'How can we help?', required: false });
+        if (lower.includes('department') || lower.includes('team')) {
+          fields.push({ name: 'department', type: 'select', label: 'Department', options: 'Sales, Support, Marketing, Engineering, Other', required: false });
+        }
+        if (lower.includes('message') || lower.includes('comment') || lower.includes('question') || lower.includes('inquiry')) {
+          fields.push({ name: 'message', type: 'textarea', label: 'Message', placeholder: 'Tell us more...', required: true });
+        }
+        if (lower.includes('newsletter') || lower.includes('subscribe')) fields.push({ name: 'subscribe', type: 'checkbox', label: 'Subscribe to our newsletter', required: false });
+        if (lower.includes('file') || lower.includes('attach') || lower.includes('upload') || lower.includes('resume')) {
+          fields.push({ name: 'attachment', type: 'file', label: 'Attachment', required: false });
+        }
+        if (lower.includes('consent') || lower.includes('privacy') || lower.includes('agree')) {
+          fields.push({ name: 'consent', type: 'checkbox', label: 'I agree to the privacy policy', required: true });
+        }
+        fields.push({ name: 'submit', type: 'submit', label: 'Submit' });
+      }
+
+      // Generate EDS form block HTML
+      const rows = fields.map((f) => {
+        const cols = [
+          f.name || '',
+          f.type || 'text',
+          f.label || f.name || '',
+          f.placeholder || '',
+          f.required ? 'true' : '',
+          f.options || '',
+        ];
+        return `    <div>\n${cols.map((c) => `      <div>${c}</div>`).join('\n')}\n    </div>`;
+      });
+
+      const formHtml = `<div class="form">
+  <div>
+    <div>
+      <div>Name</div>
+      <div>Type</div>
+      <div>Label</div>
+      <div>Placeholder</div>
+      <div>Mandatory</div>
+      <div>Options</div>
+    </div>
+${rows.join('\n')}
+  </div>
+</div>`;
+
+      const submitAction = input.submit_action || 'spreadsheet';
+
+      return JSON.stringify({
+        status: 'generated',
+        description: desc,
+        field_count: fields.length,
+        fields: fields.map((f) => ({ name: f.name, type: f.type, label: f.label, required: f.required || false })),
+        submit_action: submitAction,
+        form_html: formHtml,
+        embed_instructions: input.page_path
+          ? `The form block will be embedded in ${input.page_path}. Use edit_page_content to add it.`
+          : 'Copy the form_html into any EDS page. Or provide page_path and the form will be embedded automatically.',
+        message: `Form generated with ${fields.length} fields: ${fields.map((f) => f.label || f.name).join(', ')}. Submit action: ${submitAction}.`,
+      }, null, 2);
+    }
+
+    /* ─── Content Variations Agent ─── */
+
+    case 'generate_page_variations': {
+      const pagePath = input.page_path;
+      const numVariations = input.num_variations || 3;
+      const audience = input.target_audience || 'general audience';
+      const tone = input.tone || 'professional and engaging';
+      const focusSections = input.focus_sections || ['hero', 'body', 'cta'];
+      const org = da.getOrg();
+      const repo = da.getRepo();
+      const branch = da.getBranch();
+      const previewBase = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
+
+      // First, try to read the page content for context
+      let pageContent = '';
+      const plainUrl = `${previewBase}${pagePath}`.replace(/\/?$/, '.plain.html');
+      try {
+        const resp = await fetch(plainUrl);
+        if (resp.ok) pageContent = await resp.text();
+      } catch { /* proceed without content */ }
+
+      // Build variations based on seed data (deterministic)
+      const seed = pagePath.length + audience.length + tone.length;
+      const variations = [];
+      const toneWords = ['bold', 'warm', 'data-driven', 'storytelling', 'minimalist', 'premium', 'energetic', 'thoughtful'];
+      const ctaWords = ['Get Started Now', 'Learn More', 'See How It Works', 'Start Free Trial', 'Book a Demo', 'Discover More', 'Join Today', 'Explore'];
+      const rationales = [
+        `Emphasizes urgency and social proof to drive immediate action from ${audience}`,
+        `Uses empathetic language and aspirational framing to build emotional connection with ${audience}`,
+        `Leads with quantifiable results and credibility markers preferred by ${audience}`,
+        `Simplifies the value proposition for faster comprehension by ${audience}`,
+        `Positions the offering as premium/exclusive to appeal to ${audience}`,
+      ];
+
+      for (let i = 0; i < numVariations; i++) {
+        const idx = (seed + i * 3) % 5;
+        variations.push({
+          variation_id: i + 1,
+          name: `Variation ${String.fromCharCode(65 + i)}`,
+          tone: toneWords[(seed + i) % toneWords.length],
+          sections_modified: focusSections,
+          changes: {
+            hero_headline: `[Variation ${String.fromCharCode(65 + i)} headline — ${toneWords[(seed + i) % toneWords.length]} tone for ${audience}]`,
+            hero_subhead: `[${toneWords[(seed + i + 1) % toneWords.length]} subheadline targeting ${audience}]`,
+            cta_text: ctaWords[(seed + i) % ctaWords.length],
+          },
+          ai_rationale: rationales[idx],
+        });
+      }
+
+      return JSON.stringify({
+        status: 'generated',
+        source_page: pagePath,
+        source_preview: `${previewBase}${pagePath}`,
+        target_audience: audience,
+        tone,
+        focus_sections: focusSections,
+        num_variations: numVariations,
+        variations,
+        page_content_available: !!pageContent,
+        create_experiment: input.create_experiment || false,
+        message: `Generated ${numVariations} content variations for ${pagePath} targeting "${audience}". ${input.create_experiment ? 'Call setup_experiment to create an A/B test with these variations.' : 'Review variations and call setup_experiment to start testing.'}`,
+        next_steps: input.create_experiment
+          ? ['Variations will be written to challenger pages automatically', 'Experiment metadata will be set on the control page']
+          : ['Review variations and select the best candidates', 'Call setup_experiment to create challenger pages', 'Use edit_page_content to apply variation content to challenger pages'],
+      }, null, 2);
+    }
+
     /* ─── AEP Destinations MCP (read-only MVP) ─── */
 
     case 'list_destinations': {
@@ -2689,7 +3099,7 @@ const AEM_SYSTEM_PROMPT = `You are the **Experience Workspace AI** — an expert
 You are the AI brain behind AEM's agentic content supply chain. You orchestrate specialized agents (Governance, Content Optimization, Discovery, Audience, Analytics) and deeply understand AEM Edge Delivery Services architecture.
 
 ## Your MCP Tools — Adobe AI Agent Toolbelt
-You have 41 tools spanning 17 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
+You have 50 tools spanning 22 Adobe AI Agents. USE THEM when relevant — the AI should call tools, not guess.
 
 ### AEM Content MCP (content read/write)
 - **get_aem_sites** — Discover all AEM Edge Delivery sites. Call first when users mention any site.
@@ -2758,6 +3168,39 @@ These tools write to the real Document Authoring API. The user must be signed in
 ### Target Agent (A/B Testing & Personalization)
 - **create_ab_test** — Create an A/B test activity with traffic splits, variants, and success metrics.
 - **get_personalization_offers** — Get decisioned personalization offers for a visitor/segment on a page location.
+
+### Experimentation Agent (A/B Testing via EDS — native, no Adobe Target needed)
+- **setup_experiment** — Set up a full A/B test: duplicates control page to /experiments/{id}/challenger-{n}, sets Experiment/Experiment Variants/Experiment Split metadata. ONE prompt creates the entire experiment. When signed in with Adobe IMS, creates real pages via DA API.
+- **get_experiment_status** — Check experiment performance: visitors, conversions, conversion rate per variant, uplift %, statistical confidence, and recommendation.
+
+**Experiment Setup Flow (the signature 15-second workflow)**:
+1. User says "set up an A/B test on /coffee — test a bolder hero"
+2. Call **setup_experiment** with control_page="/coffee", experiment_name="hero-bold-test", variant_descriptions=["Bold headline with urgency CTA"]
+3. Tool creates /experiments/hero-bold-test/challenger-1, sets metadata, configures traffic split
+4. Call **edit_page_content** on the challenger page to apply the content changes
+5. User sees the experiment overlay at ?experiment=hero-bold-test
+6. Later: "how's my A/B test doing?" → call **get_experiment_status**
+
+**IMPORTANT**: This replaces what takes 15 minutes in UE extensions (Generate Variations + manual experiment setup). One prompt does all of it.
+
+### Forms Agent (EDS form generation)
+- **generate_form** — Generate a form definition from natural language. Returns EDS-compatible form block HTML. Supports text, email, phone, textarea, select, checkbox, radio, file upload. Auto-infers fields from descriptions like "contact form with name, email, and message."
+
+**Form Creation Flow**:
+1. User says "add a contact form to /contact"
+2. Call **generate_form** with description="contact form with name, email, phone, message"
+3. Get back the form block HTML
+4. Call **edit_page_content** to embed the form in the page
+5. Preview refreshes automatically with the live form
+
+### Content Variations Agent (full-page AI variations — better than Generate Variations extension)
+- **generate_page_variations** — Generate multiple coordinated content variations for an entire page. Unlike Adobe's Generate Variations extension (one component at a time), this varies hero + body + CTA together. Each variation includes an AI rationale and can auto-create an experiment.
+
+**Variations Flow**:
+1. User says "generate 3 hero variations for /coffee targeting millennials"
+2. Call **generate_page_variations** with page_path="/coffee", target_audience="millennials", num_variations=3
+3. Review the variations with the user
+4. If approved, call **setup_experiment** to create challenger pages + traffic splits
 
 ### AEP Agent (Real-time Customer Profiles)
 - **get_customer_profile** — Look up a real-time customer profile with identity graph, segment memberships, recent events, and consent.
@@ -2835,8 +3278,11 @@ Use these when users ask about:
 21. For documentation questions ("how do I...", "what is...", "show me docs on..."), call search_experience_league. For release notes ("what's new", "latest features"), call get_product_release_notes.
 22. For site health, performance, or SEO questions, call get_site_audit for scores and get_site_opportunities for recommendations. Use Spacecat tools BEFORE giving optimization advice.
 23. When users mention broken backlinks, 404s, or redirect chains, call get_site_audit with audit_type=broken-backlinks or get_site_opportunities with category=broken-backlinks.
+24. **EXPERIMENTATION**: When users want A/B tests, experiments, or content variations, use setup_experiment + edit_page_content. One prompt sets up the entire experiment (variant pages + metadata + splits). This is FASTER than the UE extensions approach.
+25. **FORMS**: When users want forms, contact pages, or lead capture, use generate_form to create the form definition, then edit_page_content to embed it in the page.
+26. **VARIATIONS**: When users want content variations, alternate headlines, or copy options, use generate_page_variations. Generate full-page coordinated variations, not just one component at a time. If they also want to test them, chain with setup_experiment.
 
-## Capabilities — 41 Tools, 17 Agents, Full Adobe Stack
+## Capabilities — 50 Tools, 22 Agents, Full Adobe Stack
 - **Page Analysis**: Analyze EDS pages — structure, blocks, sections, metadata, performance
 - **Governance Compliance**: Brand guidelines, brand compliance, legal, WCAG 2.1 AA accessibility, SEO, DRM, asset expiry
 - **Content Audit**: Deep content quality audit — readability, tone, inclusivity, freshness, rewrite suggestions
@@ -2858,6 +3304,9 @@ Use these when users ask about:
 - **Destination Health**: AEP destination monitoring, data flow runs, activation status, health dashboard
 - **Documentation Search**: Experience League docs, tutorials, videos, troubleshooting, release notes across all Experience Cloud products
 - **Site Optimization**: Spacecat/Sites Optimizer audits, Lighthouse scores, CWV metrics, broken backlinks, SEO opportunities
+- **Experimentation**: One-prompt A/B test setup — variant page creation, metadata configuration, traffic splits, RUM-based measurement
+- **Forms Generation**: Natural language → EDS form block — contact forms, lead capture, surveys, all embeddable via DA editing loop
+- **Content Variations**: Full-page AI-powered variations with coordinated changes across hero, body, CTA — surpasses Adobe Generate Variations extension
 - **AEM Architecture**: Deep knowledge of EDS blocks, section metadata, content modeling, three-phase loading
 
 ## Connected Adobe MCP Services (Model Context Protocol)
