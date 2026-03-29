@@ -77,6 +77,11 @@ let relayReject = null;
  */
 function handleRelayMessage(event) {
   if (!event.data || event.data.type !== 'ew-ims-relay') return;
+
+  // Validate origin — only accept tokens from trusted Adobe/DA origins
+  const trustedOrigins = ['https://da.live', 'https://www.da.live', window.location.origin];
+  if (!trustedOrigins.includes(event.origin)) return;
+
   const { token } = event.data;
   if (!token) return;
 

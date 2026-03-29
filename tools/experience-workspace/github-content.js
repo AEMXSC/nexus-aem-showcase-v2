@@ -117,6 +117,50 @@ export async function listContent(org, repo, path = '', branch = 'main') {
     : [data];
 }
 
+/* ─── Repo management operations ─── */
+
+/**
+ * Get repo metadata (default branch, visibility, description).
+ */
+export async function getRepoInfo(org, repo) {
+  const data = await ghFetch(`${API}/repos/${org}/${repo}`);
+  return {
+    defaultBranch: data.default_branch,
+    isPrivate: data.private,
+    description: data.description,
+    fullName: data.full_name,
+    htmlUrl: data.html_url,
+  };
+}
+
+/**
+ * List branches for a repo. Returns [{name, isDefault}].
+ */
+export async function listBranches(org, repo) {
+  const data = await ghFetch(`${API}/repos/${org}/${repo}/branches?per_page=50`);
+  return data.map((b) => ({ name: b.name, sha: b.commit?.sha }));
+}
+
+/**
+ * Get authenticated user info (validates the token).
+ */
+export async function getAuthenticatedUser() {
+  return ghFetch(`${API}/user`);
+}
+
+/**
+ * Get repo tree (recursive file listing). Uses Git Trees API for speed.
+ * Returns flat array of {path, type, size}.
+ */
+export async function getRepoTree(org, repo, branch = 'main') {
+  const data = await ghFetch(
+    `${API}/repos/${org}/${repo}/git/trees/${branch}?recursive=1`,
+  );
+  return (data.tree || [])
+    .filter((f) => f.path.endsWith('.html') || f.type === 'tree')
+    .map((f) => ({ path: f.path, type: f.type, size: f.size }));
+}
+
 /**
  * Trigger AEM preview via admin.hlx.page.
  * For DA-backed sites, this needs IMS auth (won't work with GitHub token).

@@ -12,18 +12,18 @@
     <!-- Sidebar -->
     <nav class="sidebar">
       <div class="sidebar-top">
-        <button class="sidebar-btn active" title="Home" data-panel="home">
+        <button class="sidebar-btn active" title="Home" aria-label="Home" data-panel="home">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>
         </button>
-        <button class="sidebar-btn" title="Content" data-panel="content">
+        <button class="sidebar-btn" title="Content" aria-label="Content" data-panel="content">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </button>
-        <button class="sidebar-btn" title="Code" data-panel="code">
+        <button class="sidebar-btn" title="Code" aria-label="Code" data-panel="code">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
         </button>
       </div>
       <div class="sidebar-bottom">
-        <button class="sidebar-btn" id="railSettingsBtn" title="Settings">
+        <button class="sidebar-btn" id="railSettingsBtn" title="Settings" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         </button>
       </div>
@@ -53,11 +53,8 @@
               <svg width="16" height="16" viewBox="0 0 16 16"><rect x="1" y="1" width="4" height="14" rx="1" fill="currentColor" opacity="0.3"/><rect x="6" y="1" width="6" height="14" rx="1" fill="currentColor" opacity="0.6"/><rect x="13" y="1" width="2" height="14" rx="1" fill="currentColor" opacity="0.3"/><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1" fill="none"/></svg>
             </button>
           </div>
-          <div class="breadcrumb">
+          <div class="breadcrumb" id="breadcrumb">
             <span class="breadcrumb-item" data-nav="home">Home</span>
-            <span class="breadcrumb-sep">&rsaquo;</span>
-            <svg class="breadcrumb-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <span class="breadcrumb-page" id="breadcrumbPage">index</span>
           </div>
         </div>
 
@@ -79,11 +76,11 @@
         <button id="newProfileBtn" class="new-profile-btn">+ New Customer Profile</button>
         <div class="settings-hint">Switch profiles or generate new ones from discovery notes</div>
 
-        <label class="settings-label" style="margin-top:16px">Claude API Key</label>
+        <label class="settings-label" style="margin-top:16px" for="claudeKeyInput">Claude API Key</label>
         <input type="password" id="claudeKeyInput" class="settings-input" placeholder="sk-ant-...">
         <div class="settings-hint">Enables real AI chat, governance analysis, and brief processing</div>
 
-        <label class="settings-label" style="margin-top:16px">GitHub Token (PAT)</label>
+        <label class="settings-label" style="margin-top:16px" for="githubTokenInput">GitHub Token (PAT)</label>
         <div class="settings-token-row">
           <input type="password" id="githubTokenInput" class="settings-input" placeholder="ghp_...">
           <button class="settings-token-btn" id="githubTokenBtn" title="Set token">Set</button>
@@ -94,7 +91,7 @@
         </div>
         <div class="settings-token-status" id="githubTokenStatus"></div>
 
-        <label class="settings-label" style="margin-top:16px">Adobe IMS Token</label>
+        <label class="settings-label" style="margin-top:16px" for="imsTokenInput">Adobe IMS Token</label>
         <div class="settings-token-row">
           <input type="password" id="imsTokenInput" class="settings-input" placeholder="eyJhbGci...">
           <button class="settings-token-btn" id="imsTokenBtn" title="Paste token">Set</button>
@@ -156,17 +153,17 @@
         </div>
 
         <div class="settings-actions">
-          <button class="settings-save" onclick="document.getElementById('settingsPanel').classList.remove('visible'); const k=document.getElementById('claudeKeyInput'); if(k.value && !k.value.endsWith('...')) localStorage.setItem('ew-claude-key',k.value.trim()); location.reload();">Save</button>
-          <button class="settings-cancel" onclick="document.getElementById('settingsPanel').classList.remove('visible')">Cancel</button>
+          <button class="settings-save" id="settingsSaveBtn">Save</button>
+          <button class="settings-cancel" id="settingsCancelBtn">Cancel</button>
         </div>
       </div>
 
       <!-- Sign-In Relay Modal -->
-      <div id="relayModal" class="relay-modal">
+      <div id="relayModal" class="relay-modal" role="dialog" aria-modal="true" aria-label="IMS Token Relay">
         <div class="relay-modal-content">
           <div class="relay-modal-header">
             <span class="relay-modal-title">Sign In with Adobe</span>
-            <button id="relayModalClose" class="relay-modal-close">&times;</button>
+            <button id="relayModalClose" class="relay-modal-close" aria-label="Close">&times;</button>
           </div>
 
           <!-- Step 1: Setup bookmarklet (shown first time only) -->
@@ -214,11 +211,11 @@
       </div>
 
       <!-- Profile Generator Modal -->
-      <div id="profileModal" class="profile-modal">
+      <div id="profileModal" class="profile-modal" role="dialog" aria-modal="true" aria-label="Customer Profile">
         <div class="profile-modal-content">
           <div class="profile-modal-header">
             <span class="profile-modal-title">Generate Customer Profile</span>
-            <button id="profileModalClose" class="profile-modal-close">&times;</button>
+            <button id="profileModalClose" class="profile-modal-close" aria-label="Close">&times;</button>
           </div>
 
           <!-- Step 1: Input -->
@@ -271,7 +268,7 @@
               <button class="home-prompt-attach" title="Upload file">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
               </button>
-              <input type="text" class="home-prompt-input" id="homePromptInput" placeholder="Describe what you want to build..." autocomplete="off">
+              <input type="text" class="home-prompt-input" id="homePromptInput" placeholder="Describe what you want to build..." autocomplete="off" aria-label="Describe what you want to build">
               <button class="home-prompt-generate" id="homePromptSend">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 Generate
@@ -289,7 +286,7 @@
             <div class="connect-site-row">
               <div class="connect-site-input-wrap">
                 <svg class="connect-site-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
-                <input type="text" class="connect-site-input" id="connectSiteInput" placeholder="org/repo  (e.g. AEMXSC/xscteamsite)" autocomplete="off">
+                <input type="text" class="connect-site-input" id="connectSiteInput" placeholder="org/repo  (e.g. AEMXSC/xscteamsite)" autocomplete="off" aria-label="GitHub organization and repository">
                 <button class="connect-site-btn" id="connectSiteBtn">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                   Connect
@@ -298,6 +295,7 @@
               <div class="connect-site-status" id="connectSiteStatus"></div>
             </div>
             <div class="connect-site-hint">Enter a GitHub org/repo to load an Edge Delivery Services site</div>
+            <div class="recent-repos" id="recentRepos"></div>
           </div>
 
           <!-- 3 Cards (SpellForge style) -->
@@ -376,12 +374,31 @@
 
             <!-- Input Area -->
             <div class="input-area">
+              <div class="input-mode-bar">
+                <div class="mode-toggle" id="modeToggle">
+                  <button class="mode-btn active" data-mode="execute" title="Execute mode — AI modifies files directly">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Execute
+                  </button>
+                  <button class="mode-btn" data-mode="plan" title="Plan mode — AI analyzes and proposes strategy before changes">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+                    Plan
+                  </button>
+                </div>
+                <div class="design-selection" id="designSelection" style="display:none">
+                  <span class="design-selection-badge">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                    <span id="designSelectionLabel">element</span>
+                  </span>
+                  <button class="design-selection-clear" id="designSelectionClear" title="Remove selection">&times;</button>
+                </div>
+              </div>
               <div class="input-wrapper">
-                <button class="attach-btn" title="Upload file">
+                <button class="attach-btn" title="Upload file" aria-label="Upload file">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
                 </button>
-                <input type="text" class="chat-input" id="chatInput" placeholder="Talk to Experience Workspace..." autocomplete="off">
-                <button class="send-btn" id="sendBtn" title="Send">
+                <input type="text" class="chat-input" id="chatInput" placeholder="Talk to Experience Workspace..." autocomplete="off" aria-label="Chat message">
+                <button class="send-btn" id="sendBtn" title="Send" aria-label="Send message">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 </button>
               </div>
@@ -396,18 +413,19 @@
             <div class="preview-toolbar">
               <div class="preview-locale">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-                <select class="locale-select" id="localeSelect">
-                  <option value="global">Global</option>
-                  <option value="en-us">en-US</option>
-                  <option value="fr-fr">fr-FR</option>
-                  <option value="de-de">de-DE</option>
-                  <option value="ja-jp">ja-JP</option>
+                <select class="locale-select" id="localeSelect" aria-label="Locale">
+                  <option value="">Global</option>
                 </select>
               </div>
               <div class="preview-site-url" id="previewSiteUrl" title="Click to switch site">
                 <span class="site-dot connected" id="previewDot"></span>
                 <span class="preview-url-text" id="previewUrlText">Not connected</span>
                 <input type="text" class="site-switch-input" id="siteSwitchInput" placeholder="org/repo" autocomplete="off" style="display:none">
+              </div>
+              <div class="preview-view-tabs" id="previewViewTabs">
+                <button class="preview-view-tab active" data-view="preview" title="Page preview">Preview</button>
+                <button class="preview-view-tab" data-view="design" title="Design mode — click elements to add to prompt">Design</button>
+                <button class="preview-view-tab" data-view="jcr" title="JCR XML view — AEM content structure">JCR XML</button>
               </div>
               <div class="preview-actions">
                 <select class="branch-select" id="branchSelect" title="Branch">
@@ -424,9 +442,44 @@
                 <button class="preview-action-btn" id="refreshPreviewBtn" title="Refresh preview">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                 </button>
+                <button class="preview-action-btn preview-action-pkg" id="packageBtn" title="Package content for upload">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0022 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                  Pkg
+                </button>
               </div>
             </div>
-            <iframe class="preview-frame" id="previewFrame" src="about:blank" title="Page Preview"></iframe>
+            <div class="preview-frame-wrap" id="previewFrameWrap">
+              <iframe class="preview-frame" id="previewFrame" src="about:blank" title="Page Preview"></iframe>
+              <div class="design-overlay" id="designOverlay" style="display:none"></div>
+              <div class="jcr-view" id="jcrView" style="display:none">
+                <pre class="jcr-xml-content" id="jcrXmlContent">Select a page to view its JCR structure.</pre>
+              </div>
+            </div>
+            <!-- Content Package Modal -->
+            <div class="package-modal" id="packageModal" style="display:none" role="dialog" aria-modal="true" aria-label="Package Content">
+              <div class="package-modal-inner">
+                <div class="package-modal-header">
+                  <span>Package Content</span>
+                  <button class="package-modal-close" id="packageModalClose" aria-label="Close">&times;</button>
+                </div>
+                <div class="package-modal-body">
+                  <div class="package-pages" id="packagePages"></div>
+                  <div class="package-options">
+                    <label class="package-label">Package name</label>
+                    <input type="text" class="package-input" id="packageName" placeholder="my-site-content">
+                    <label class="package-label" style="margin-top:8px">Upload images</label>
+                    <label class="package-checkbox"><input type="checkbox" id="packageImages" checked> Include referenced images</label>
+                  </div>
+                </div>
+                <div class="package-modal-footer">
+                  <button class="package-cancel-btn" id="packageCancelBtn">Cancel</button>
+                  <button class="package-upload-btn" id="packageUploadBtn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Upload to DA
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Resources Panel -->
@@ -452,11 +505,11 @@
   </div>
 
   <!-- PDF.js for real PDF text extraction (Differentiator #3) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
   <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 
   <!-- Mammoth.js for DOCX text extraction -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" integrity="sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz" crossorigin="anonymous"></script>
 
   <script src="app.js?v=24" type="module"></script>
 </body>

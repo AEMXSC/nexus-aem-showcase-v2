@@ -14,13 +14,15 @@ import * as ai from './ai.js?v=24';
 import { TOOL_AGENT_MAP } from './ai.js?v=24';
 import * as da from './da-client.js?v=24';
 import * as gov from './governance.js';
-import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, PROFILES, buildCustomerContext, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
+import { getActiveProfile, getOrgConfig, setActiveProfile, listProfiles, addCustomProfile, deleteCustomProfile, buildProfilePrompt } from './customer-profiles.js';
 import { detectSiteMention } from './known-sites.js';
-import { getGitHubToken, setGitHubToken, hasGitHubToken } from './github-content.js';
+import { getGitHubToken, setGitHubToken, hasGitHubToken, getRepoInfo, listBranches, getRepoTree } from './github-content.js';
+import { detectAndCacheSiteType, getSiteType } from './site-detect.js';
 
 /* ── Dynamic Org Configuration (from customer profile) ── */
 let AEM_ORG = getOrgConfig();
 let PREVIEW_URL = AEM_ORG.previewOrigin + '/';
+window.__EW_ORG = AEM_ORG; // expose for ai.js tool handlers
 
 /* ── DOM refs ── */
 const chatMessages = document.getElementById('chatMessages');
@@ -39,7 +41,8 @@ const editorToolbar = document.getElementById('editorToolbar');
 const panels = document.getElementById('panels');
 const resourcesTree = document.getElementById('resourcesTree');
 const fileTreeEl = document.getElementById('fileTree');
-const breadcrumbPage = document.getElementById('breadcrumbPage');
+const breadcrumbEl = document.getElementById('breadcrumb');
+const localeSelect = document.getElementById('localeSelect');
 const previewUrlText = document.getElementById('previewUrlText');
 const previewDot = document.getElementById('previewDot');
 const homeSiteName = document.getElementById('homeSiteName');
@@ -53,13 +56,50 @@ let pendingFile = null; // { name, type, size, content (text or base64), mediaTy
 let currentView = 'home'; // 'home' | 'editor'
 let sitePages = []; // loaded from query-index.json
 let activeResourcePath = null;
+let detectedLocales = []; // e.g. ['en', 'fr', 'de'] — auto-detected from page paths
+let activeLocale = ''; // current locale filter (empty = global / all)
+
+/* ── Constants ── */
+const TOAST_DURATION_MS = 4000;
+const TOKEN_PREVIEW_LENGTH = 12;
+const MAX_PDF_PAGES = 30;
+const MAX_BRAND_TEXT_LENGTH = 3000;
+const MIN_PANEL_WIDTH = 280;
+const MAX_PANEL_RATIO = 0.6;
+const ONE_MINUTE_MS = 60000;
+const ONE_HOUR_MS = 3600000;
+const ONE_DAY_MS = 86400000;
+const MAX_FILE_CONTENT_LENGTH = 30000;
 
 /* ── Utility ── */
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 function scrollChat() { chatMessages.scrollTop = chatMessages.scrollHeight; }
 
+/** Escape HTML entities to prevent XSS when inserting into innerHTML */
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/** Truncate a string and add ellipsis */
+function truncate(str, len = 30) {
+  if (!str) return '';
+  return str.length > len ? str.slice(0, len) + '...' : str;
+}
+
+/** Mask a token for display (show first N chars + ...) */
+function maskToken(token, len = TOKEN_PREVIEW_LENGTH) {
+  if (!token) return '(empty)';
+  return token.slice(0, len) + '...';
+}
+
 /* ── Toast Notification System ── */
-function showToast(message, type = 'info', duration = 4000) {
+function showToast(message, type = 'info', duration = TOAST_DURATION_MS) {
   let container = document.getElementById('toastContainer');
   if (!container) {
     container = document.createElement('div');
@@ -73,7 +113,7 @@ function showToast(message, type = 'info', duration = 4000) {
   const icons = { success: '✓', error: '✕', warn: '⚠', info: 'ℹ' };
   toast.innerHTML = `
     <span class="toast-icon">${icons[type] || icons.info}</span>
-    <span class="toast-message">${message}</span>
+    <span class="toast-message">${escapeHtml(message)}</span>
   `;
 
   container.appendChild(toast);
@@ -87,7 +127,8 @@ function showToast(message, type = 'info', duration = 4000) {
 }
 
 function md(text) {
-  return text
+  // Escape HTML first to prevent XSS, then apply markdown transforms
+  return escapeHtml(text)
     .replace(/### (.*?)(\n|$)/g, '<h3>$1</h3>')
     .replace(/## (.*?)(\n|$)/g, '<h2>$1</h2>')
     .replace(/# (.*?)(\n|$)/g, '<h1>$1</h1>')
@@ -236,8 +277,8 @@ function toggleSettings() {
     html += '<div class="conn-list">';
     connectors.forEach((c) => {
       const dot = c.status === 'live' ? 'var(--green)' : 'var(--yellow)';
-      const ep = c.endpoint ? `<span class="conn-endpoint">${c.endpoint}</span>` : '';
-      html += `<div class="conn-row"><span class="conn-dot" style="background:${dot}"></span><span class="conn-name">${c.name}</span><span class="conn-env">${c.env}</span>${ep}</div>`;
+      const ep = c.endpoint ? `<span class="conn-endpoint">${escapeHtml(c.endpoint)}</span>` : '';
+      html += `<div class="conn-row"><span class="conn-dot" style="background:${dot}"></span><span class="conn-name">${escapeHtml(c.name)}</span><span class="conn-env">${escapeHtml(c.env)}</span>${ep}</div>`;
     });
     html += '</div>';
     connBox.innerHTML = html;
@@ -251,7 +292,12 @@ function saveSettings() {
   }
   toggleSettings();
   updateAuthUI();
+  showToast('Settings saved');
 }
+
+// Wire settings Save / Cancel buttons (no page reload, preserves chat)
+document.getElementById('settingsSaveBtn')?.addEventListener('click', saveSettings);
+document.getElementById('settingsCancelBtn')?.addEventListener('click', toggleSettings);
 
 /* ── GitHub Token paste ── */
 const githubTokenBtn = document.getElementById('githubTokenBtn');
@@ -494,8 +540,8 @@ function renderBrandPolicies() {
     <div class="brand-policy-item">
       <span class="brand-policy-icon">${categoryIcon(p.category)}</span>
       <div>
-        <div class="brand-policy-category">${p.category || 'General'}</div>
-        <div class="brand-policy-text">${p.rule}</div>
+        <div class="brand-policy-category">${escapeHtml(p.category || 'General')}</div>
+        <div class="brand-policy-text">${escapeHtml(p.rule)}</div>
       </div>
     </div>
   `).join('');
@@ -1234,8 +1280,8 @@ async function handleRealChat(text, file) {
     bodyEl.innerHTML += `
       <div class="tool-call-row active" id="${toolId}">
         <span class="tool-call-dot"></span>
-        <span class="tool-call-name">${toolName}</span>
-        <span class="tool-call-args">(${inputSummary})</span>
+        <span class="tool-call-name">${escapeHtml(toolName)}</span>
+        <span class="tool-call-args">(${escapeHtml(inputSummary)})</span>
         <span class="tool-call-status">Running</span>
       </div>
     `;
@@ -1392,7 +1438,7 @@ async function handleRealChat(text, file) {
       }
     }
   } catch (err) {
-    streamEl.innerHTML = `<span style="color:var(--accent)">AI Error: ${err.message}</span><br>Check your API key in settings.`;
+    streamEl.innerHTML = `<span style="color:var(--accent)">AI Error: ${escapeHtml(err.message)}</span><br>Check your API key in settings.`;
   }
 }
 
@@ -1669,7 +1715,7 @@ Return a structured, actionable analysis.` }],
       );
       updateOrchestrationStep(step2, 'done');
     } catch (err) {
-      streamEl2.innerHTML = `Error: ${err.message}`;
+      streamEl2.innerHTML = `Error: ${escapeHtml(err.message)}`;
       updateOrchestrationStep(step2, 'error');
       return;
     }
@@ -1699,7 +1745,7 @@ Generate ready-to-author content.` }],
       );
       updateOrchestrationStep(step3, 'done');
     } catch (err) {
-      streamEl3.innerHTML = `Error: ${err.message}`;
+      streamEl3.innerHTML = `Error: ${escapeHtml(err.message)}`;
       updateOrchestrationStep(step3, 'error');
       return;
     }
@@ -1733,7 +1779,7 @@ ${profile.approvalChain?.map((s, i) => `   ${i + 1}. ${s.role}${s.sla ? ` (SLA: 
       );
       updateOrchestrationStep(step4, 'done');
     } catch (err) {
-      streamEl4.innerHTML = `Error: ${err.message}`;
+      streamEl4.innerHTML = `Error: ${escapeHtml(err.message)}`;
       updateOrchestrationStep(step4, 'error');
       return;
     }
@@ -1758,7 +1804,7 @@ End with estimated time to publish.` }],
       );
       updateOrchestrationStep(step5, 'done');
     } catch (err) {
-      streamEl5.innerHTML = `Error: ${err.message}`;
+      streamEl5.innerHTML = `Error: ${escapeHtml(err.message)}`;
       updateOrchestrationStep(step5, 'error');
       return;
     }
@@ -1901,7 +1947,7 @@ Make this feel like a real brief analysis — specific, actionable, ready for co
     );
     updateOrchestrationStep(step1, 'done');
   } catch (err) {
-    streamEl1.innerHTML = `Error: ${err.message}`;
+    streamEl1.innerHTML = `Error: ${escapeHtml(err.message)}`;
     updateOrchestrationStep(step1, 'error');
     return;
   }
@@ -1933,7 +1979,7 @@ This page would be created via AEM Content MCP in a real deployment.`;
     );
     updateOrchestrationStep(step2, 'done');
   } catch (err) {
-    streamEl2.innerHTML = `Error: ${err.message}`;
+    streamEl2.innerHTML = `Error: ${escapeHtml(err.message)}`;
     updateOrchestrationStep(step2, 'error');
     return;
   }
@@ -1969,7 +2015,7 @@ Provide:
     );
     updateOrchestrationStep(step3, 'done');
   } catch (err) {
-    streamEl3.innerHTML = `Error: ${err.message}`;
+    streamEl3.innerHTML = `Error: ${escapeHtml(err.message)}`;
     updateOrchestrationStep(step3, 'error');
     return;
   }
@@ -2000,7 +2046,7 @@ Reference CJA data views and AA report suites where applicable.`;
     );
     updateOrchestrationStep(step4, 'done');
   } catch (err) {
-    streamEl4.innerHTML = `Error: ${err.message}`;
+    streamEl4.innerHTML = `Error: ${escapeHtml(err.message)}`;
     updateOrchestrationStep(step4, 'error');
     return;
   }
@@ -2035,7 +2081,7 @@ End with: "Full orchestration complete. 5 agents, 1 thread, 0 product boundaries
     );
     updateOrchestrationStep(step5, 'done');
   } catch (err) {
-    streamEl5.innerHTML = `Error: ${err.message}`;
+    streamEl5.innerHTML = `Error: ${escapeHtml(err.message)}`;
     updateOrchestrationStep(step5, 'error');
     return;
   }
@@ -2253,11 +2299,31 @@ async function loadResources() {
     } catch { /* ignore */ }
   }
 
+  // Fallback: GitHub API tree (works for private repos with PAT)
+  if (sitePages.length === 0 && hasGitHubToken()) {
+    try {
+      const org = AEM_ORG.orgId;
+      const repo = AEM_ORG.repo;
+      const branch = AEM_ORG.branch || 'main';
+      const tree = await getRepoTree(org, repo, branch);
+      const htmlFiles = tree.filter((f) => f.type === 'blob' && f.path.endsWith('.html'));
+      sitePages = htmlFiles.map((f) => {
+        const pagePath = '/' + f.path.replace(/\.html$/, '').replace(/\/index$/, '/');
+        return {
+          path: pagePath === '/index' ? '/' : pagePath,
+          title: f.path.split('/').pop().replace('.html', '') || 'index',
+          description: '',
+        };
+      });
+    } catch { /* ignore */ }
+  }
+
   // Fallback: at least show the homepage
   if (sitePages.length === 0) {
     sitePages = [{ path: '/', title: 'index', description: 'Homepage' }];
   }
 
+  detectLocales();
   renderResources();
 }
 
@@ -2268,8 +2334,21 @@ function renderResources() {
     return;
   }
 
+  // Filter by active locale if set
+  const filteredPages = activeLocale
+    ? sitePages.filter((p) => {
+      const match = p.path.match(LOCALE_PATTERN);
+      return match && match[1].toLowerCase().replace('_', '-') === activeLocale;
+    })
+    : sitePages;
+
+  if (filteredPages.length === 0) {
+    resourcesTree.innerHTML = '<div class="resources-empty">No pages for this locale</div>';
+    return;
+  }
+
   resourcesTree.innerHTML = '';
-  sitePages.forEach((page) => {
+  filteredPages.forEach((page) => {
     const item = document.createElement('div');
     item.classList.add('resource-item');
     if (page.path === activeResourcePath) item.classList.add('active');
@@ -2282,8 +2361,8 @@ function renderResources() {
 
     item.innerHTML = `
       <span class="resource-icon">${iconSvg}</span>
-      <span class="resource-name">${page.title}</span>
-      <span class="resource-status" data-path="${page.path}"></span>
+      <span class="resource-name">${escapeHtml(page.title)}</span>
+      <span class="resource-status" data-path="${escapeHtml(page.path)}"></span>
     `;
 
     item.addEventListener('click', () => navigateToPage(page.path));
@@ -2316,6 +2395,145 @@ async function enrichResourceStatus() {
   }
 }
 
+/* ── Locale detection — scans page paths for language folders ── */
+
+/** Common locale patterns: /en/, /fr-fr/, /us/en/, /content/site/en/, etc. */
+const LOCALE_PATTERN = /^\/(?:content\/[^/]+\/)?([a-z]{2}(?:[_-][a-z]{2})?)(?:\/|$)/i;
+
+/**
+ * Scan sitePages for locale prefixes and populate the locale selector.
+ * Called after loadResources() finishes.
+ */
+function detectLocales() {
+  const localeCounts = new Map();
+
+  for (const page of sitePages) {
+    const match = page.path.match(LOCALE_PATTERN);
+    if (match) {
+      const loc = match[1].toLowerCase().replace('_', '-');
+      localeCounts.set(loc, (localeCounts.get(loc) || 0) + 1);
+    }
+  }
+
+  // Only treat as multi-locale if at least 2 locales with 2+ pages each
+  const validLocales = [...localeCounts.entries()]
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1]);
+
+  detectedLocales = validLocales.length >= 2 ? validLocales.map(([loc]) => loc) : [];
+
+  if (!localeSelect) return;
+
+  // Reset options
+  localeSelect.innerHTML = '';
+  const globalOpt = document.createElement('option');
+  globalOpt.value = '';
+  globalOpt.textContent = detectedLocales.length > 0 ? 'All Locales' : 'Global';
+  localeSelect.appendChild(globalOpt);
+
+  // Add detected locales
+  for (const loc of detectedLocales) {
+    const opt = document.createElement('option');
+    opt.value = loc;
+    // Format nicely: en-us → en-US, fr → FR
+    const parts = loc.split('-');
+    opt.textContent = parts.length > 1
+      ? `${parts[0]}-${parts[1].toUpperCase()}`
+      : loc.toUpperCase();
+    localeSelect.appendChild(opt);
+  }
+
+  // Restore previous selection if still valid
+  if (activeLocale && detectedLocales.includes(activeLocale)) {
+    localeSelect.value = activeLocale;
+  } else {
+    activeLocale = '';
+    localeSelect.value = '';
+  }
+
+  // Show/hide locale selector based on whether locales were detected
+  const localeContainer = localeSelect.closest('.preview-locale');
+  if (localeContainer) {
+    localeContainer.style.display = detectedLocales.length > 0 ? 'flex' : 'none';
+  }
+}
+
+/** Filter resources list by active locale and re-render */
+function filterByLocale(locale) {
+  activeLocale = locale;
+  renderResources();
+}
+
+/* ── Breadcrumb — builds full clickable path ── */
+
+function updateBreadcrumb(path) {
+  if (!breadcrumbEl) return;
+
+  breadcrumbEl.innerHTML = '';
+
+  // Home link (always first)
+  const homeSpan = document.createElement('span');
+  homeSpan.className = 'breadcrumb-item';
+  homeSpan.dataset.nav = 'home';
+  homeSpan.textContent = 'Home';
+  homeSpan.addEventListener('click', () => switchView('home'));
+  breadcrumbEl.appendChild(homeSpan);
+
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 0) {
+    // Root path — show "Home > index"
+    appendBreadcrumbSep();
+    appendBreadcrumbLeaf('index');
+    return;
+  }
+
+  // Build clickable segments for each folder level
+  let accumulated = '';
+  for (let i = 0; i < segments.length; i++) {
+    appendBreadcrumbSep();
+    accumulated += '/' + segments[i];
+    const isLast = i === segments.length - 1;
+
+    if (isLast) {
+      // Last segment — page icon + bold name (not clickable)
+      appendBreadcrumbLeaf(segments[i]);
+    } else {
+      // Intermediate folder — clickable
+      const folderPath = accumulated + '/';
+      const span = document.createElement('span');
+      span.className = 'breadcrumb-item';
+      span.textContent = segments[i];
+      span.addEventListener('click', () => navigateToPage(folderPath));
+      breadcrumbEl.appendChild(span);
+    }
+  }
+
+  function appendBreadcrumbSep() {
+    const sep = document.createElement('span');
+    sep.className = 'breadcrumb-sep';
+    sep.innerHTML = '&rsaquo;';
+    breadcrumbEl.appendChild(sep);
+  }
+
+  function appendBreadcrumbLeaf(name) {
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('class', 'breadcrumb-icon');
+    icon.setAttribute('width', '14');
+    icon.setAttribute('height', '14');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('fill', 'none');
+    icon.setAttribute('stroke', 'currentColor');
+    icon.setAttribute('stroke-width', '2');
+    icon.innerHTML = '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>';
+    breadcrumbEl.appendChild(icon);
+
+    const span = document.createElement('span');
+    span.className = 'breadcrumb-page';
+    span.textContent = name;
+    breadcrumbEl.appendChild(span);
+  }
+}
+
 /* ── Navigate preview iframe to a page ── */
 function navigateToPage(path) {
   activeResourcePath = path;
@@ -2323,7 +2541,7 @@ function navigateToPage(path) {
   if (previewFrame) previewFrame.src = url;
   if (previewUrlText) previewUrlText.textContent = url.replace(/^https?:\/\//, '');
   if (previewDot) previewDot.classList.add('connected');
-  if (breadcrumbPage) breadcrumbPage.textContent = path.split('/').filter(Boolean).pop() || 'index';
+  updateBreadcrumb(path);
 
   // Update active state in resources tree
   document.querySelectorAll('.resource-item').forEach((el) => {
@@ -2334,6 +2552,8 @@ function navigateToPage(path) {
   cachedPageHTML = null;
   cachedPageUrl = null;
 }
+// Expose for ai.js tool handlers
+window.__EW_NAV = navigateToPage;
 
 /* ══════════════════════════════════════════════════════════════
    FILE TREE — GitHub API + admin.hlx.page (no auth required)
@@ -2552,7 +2772,7 @@ async function loadFileTree() {
         row.innerHTML = `
           <span class="ft-chevron${isDir ? '' : ' hidden'}">${FT_ICONS.chevron}</span>
           <span class="ft-icon ${isDir ? 'folder' : 'file'}">${getFileIcon(name, isDir)}</span>
-          <span class="ft-name">${name}${item.ext ? `.${item.ext}` : ''}</span>
+          <span class="ft-name">${escapeHtml(name)}${item.ext ? `.${escapeHtml(item.ext)}` : ''}</span>
         `;
         fileTreeEl.appendChild(row);
       });
@@ -2607,6 +2827,38 @@ function connectSite() {
   if (fileTreeEl) fileTreeEl.innerHTML = '<div class="resources-loading">Click Files tab to browse...</div>';
 }
 
+/* ── Recent Repos (localStorage persistence) ── */
+const RECENT_REPOS_KEY = 'ew-recent-repos';
+const MAX_RECENT_REPOS = 5;
+
+function getRecentRepos() {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_REPOS_KEY) || '[]');
+  } catch { return []; }
+}
+
+function saveRecentRepo(org, repo, branch) {
+  const recents = getRecentRepos().filter((r) => !(r.org === org && r.repo === repo));
+  recents.unshift({ org, repo, branch, ts: Date.now() });
+  localStorage.setItem(RECENT_REPOS_KEY, JSON.stringify(recents.slice(0, MAX_RECENT_REPOS)));
+  renderRecentRepos();
+}
+
+function renderRecentRepos() {
+  const container = document.getElementById('recentRepos');
+  if (!container) return;
+  const recents = getRecentRepos();
+  if (recents.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = recents.map((r) => `<button class="recent-repo-chip" data-org="${escapeHtml(r.org)}" data-repo="${escapeHtml(r.repo)}" title="${escapeHtml(r.org)}/${escapeHtml(r.repo)} (${escapeHtml(r.branch)})">${escapeHtml(r.org)}/${escapeHtml(r.repo)}</button>`).join('');
+  container.querySelectorAll('.recent-repo-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const input = document.getElementById('connectSiteInput');
+      if (input) input.value = `${chip.dataset.org}/${chip.dataset.repo}`;
+      connectCustomSite(`${chip.dataset.org}/${chip.dataset.repo}`);
+    });
+  });
+}
+
 /* ── Connect Custom Site (AEMCoder-style org/repo input) ── */
 let customSiteConnected = false;
 
@@ -2625,7 +2877,17 @@ async function connectCustomSite(orgRepo) {
   }
 
   const [org, repo] = parts;
-  const branch = 'main';
+
+  // Detect default branch via GitHub API (falls back to 'main')
+  let branch = 'main';
+  let repoMeta = null;
+  if (hasGitHubToken()) {
+    try {
+      repoMeta = await getRepoInfo(org, repo);
+      branch = repoMeta.defaultBranch || 'main';
+    } catch { /* fallback to main */ }
+  }
+
   const previewOrigin = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
 
   // Show loading state (if home view elements exist)
@@ -2642,7 +2904,7 @@ async function connectCustomSite(orgRepo) {
   // Validate: ping the site
   let valid = false;
   try {
-    const resp = await fetch(previewOrigin, { mode: 'no-cors' });
+    await fetch(previewOrigin, { mode: 'no-cors' });
     valid = true; // no-cors won't give us status, but if it doesn't throw, the host exists
   } catch {
     // Try with cors
@@ -2681,9 +2943,19 @@ async function connectCustomSite(orgRepo) {
   };
   PREVIEW_URL = previewOrigin + '/';
   customSiteConnected = true;
+  window.__EW_ORG = AEM_ORG;
 
   // Reconfigure DA client
   da.configure({ org, repo, branch });
+
+  // Detect site type (DA vs AEM CS) via fstab.yaml — runs async, non-blocking
+  detectAndCacheSiteType(org, repo, branch).then((type) => {
+    const typeLabel = type === 'aem-cs' ? 'AEM CS (xwalk)' : type === 'da' ? 'DA' : type;
+    console.log(`[EW] Site type: ${typeLabel}`);
+    if (statusEl) {
+      statusEl.textContent = `Connected to ${org}/${repo} · ${typeLabel}`;
+    }
+  });
 
   // Update UI (home view elements may not exist when switching from toolbar)
   if (statusEl) {
@@ -2712,11 +2984,26 @@ async function connectCustomSite(orgRepo) {
   navigateToPage('/');
   loadResources();
 
-  // Populate branch select
+  // Populate branch select — real branches from GitHub API
   const branchSelect = document.getElementById('branchSelect');
   if (branchSelect) {
-    branchSelect.innerHTML = `<option value="main">main</option>`;
+    branchSelect.innerHTML = `<option value="${branch}">${branch}</option>`;
+    if (hasGitHubToken()) {
+      listBranches(org, repo).then((branches) => {
+        branchSelect.innerHTML = '';
+        branches.forEach((b) => {
+          const opt = document.createElement('option');
+          opt.value = b.name;
+          opt.textContent = b.name;
+          if (b.name === branch) opt.selected = true;
+          branchSelect.appendChild(opt);
+        });
+      }).catch(() => { /* keep current option */ });
+    }
   }
+
+  // Save to recent repos
+  saveRecentRepo(org, repo, branch);
 
   // Welcome message in chat
   addMessage('assistant', md(`**Connected to ${org}/${repo}**\nSite loaded in preview. Page tree populated from query-index.json. You can now:\n- **Prompt to edit**: "Change the hero headline on /coffee"\n- **Set up experiments**: "A/B test the hero on the homepage"\n- **Generate variations**: "Create 3 hero variations targeting millennials"\n- **Add forms**: "Add a contact form to /contact"\n- **Edit visually**: Use the DA or UE buttons in the toolbar`));
@@ -2807,7 +3094,7 @@ function handleUserInput() {
   if (indicator) indicator.remove();
 
   const displayText = file
-    ? `${text || `Uploaded ${file.name}`}${text ? '' : ''}`
+    ? (text || `Uploaded ${file.name}`)
     : text;
 
   // Always check for specialized flows first — even in AI mode
@@ -2841,7 +3128,16 @@ function handleUserInput() {
     } else {
       addMessage('user', displayText);
     }
-    handleRealChat(text || `I've uploaded a file: ${file?.name}. Please analyze it.`, file);
+    // Augment prompt with design selection context + plan mode
+    let augmentedText = text || `I've uploaded a file: ${file?.name}. Please analyze it.`;
+    if (designSelectedElement) {
+      augmentedText = `[Design Context — Selected element: ${designSelectedElement.selector}]\n${designSelectedElement.html}\n\n${augmentedText}`;
+      clearDesignSelection();
+    }
+    if (currentMode === 'plan') {
+      augmentedText = `[MODE: PLAN — Analyze and propose a strategy. Do NOT modify any files yet. Explain what changes you would make and why, then wait for approval before executing.]\n\n${augmentedText}`;
+    }
+    handleRealChat(augmentedText, file);
     return;
   }
 
@@ -2884,7 +3180,7 @@ if (attachBtn) {
       indicator.className = 'file-attach-indicator';
       indicator.innerHTML = `
         <span class="file-attach-icon">${file.type.startsWith('image/') ? '🖼' : '📄'}</span>
-        <span class="file-attach-name">${file.name}</span>
+        <span class="file-attach-name">${escapeHtml(file.name)}</span>
         <span class="file-attach-size">${(file.size / 1024).toFixed(0)} KB</span>
         <button class="file-attach-remove" title="Remove">✕</button>
       `;
@@ -3046,6 +3342,12 @@ if (homePromptInput) {
   if (homePromptSend) homePromptSend.addEventListener('click', sendHomePrompt);
 }
 
+// AI tool: switch_site event handler
+window.addEventListener('ew-switch-site', (e) => {
+  const { org, repo } = e.detail;
+  connectCustomSite(`${org}/${repo}`);
+});
+
 // Connect site input
 const connectSiteInput = document.getElementById('connectSiteInput');
 const connectSiteBtn = document.getElementById('connectSiteBtn');
@@ -3080,6 +3382,7 @@ if (branchSelect) {
   branchSelect.addEventListener('change', () => {
     const branch = branchSelect.value;
     AEM_ORG = { ...AEM_ORG, branch };
+    window.__EW_ORG = AEM_ORG;
     AEM_ORG.previewOrigin = `https://${branch}--${AEM_ORG.repo.toLowerCase()}--${AEM_ORG.orgId.toLowerCase()}.aem.page`;
     AEM_ORG.liveOrigin = `https://${branch}--${AEM_ORG.repo.toLowerCase()}--${AEM_ORG.orgId.toLowerCase()}.aem.live`;
     PREVIEW_URL = AEM_ORG.previewOrigin + '/';
@@ -3090,10 +3393,422 @@ if (branchSelect) {
   });
 }
 
-// Breadcrumb "Home" click → return to home view
-const breadcrumbHome = document.querySelector('.breadcrumb-item[data-nav="home"]');
-if (breadcrumbHome) {
-  breadcrumbHome.addEventListener('click', () => switchView('home'));
+/* ── Design Mode ── */
+let designModeActive = false;
+let designSelectedElement = null;
+const designOverlay = document.getElementById('designOverlay');
+const designSelection = document.getElementById('designSelection');
+const designSelectionLabel = document.getElementById('designSelectionLabel');
+const designSelectionClear = document.getElementById('designSelectionClear');
+
+function enableDesignMode() {
+  designModeActive = true;
+  if (designOverlay) designOverlay.style.display = 'block';
+  // Inject click handler into iframe
+  injectDesignModeHandler();
+}
+
+function disableDesignMode() {
+  designModeActive = false;
+  if (designOverlay) designOverlay.style.display = 'none';
+  // Remove highlight from iframe
+  try {
+    const doc = previewFrame?.contentDocument || previewFrame?.contentWindow?.document;
+    if (doc) {
+      doc.querySelectorAll('[data-ew-highlight]').forEach((el) => {
+        el.style.outline = '';
+        el.removeAttribute('data-ew-highlight');
+      });
+    }
+  } catch { /* cross-origin */ }
+}
+
+function injectDesignModeHandler() {
+  if (!previewFrame) return;
+
+  // Use a transparent overlay that captures clicks and maps them to iframe elements
+  if (designOverlay) {
+    designOverlay.onclick = (e) => {
+      const rect = previewFrame.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      try {
+        const doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+        // Clear previous highlight
+        doc.querySelectorAll('[data-ew-highlight]').forEach((el) => {
+          el.style.outline = '';
+          el.removeAttribute('data-ew-highlight');
+        });
+        const el = doc.elementFromPoint(x, y);
+        if (el && el !== doc.body && el !== doc.documentElement) {
+          selectDesignElement(el);
+        }
+      } catch {
+        // Cross-origin iframe — try postMessage approach
+        showToast('Design mode requires same-origin preview (use srcdoc or localhost)', 'warn');
+      }
+    };
+
+    // Hover highlight via mousemove
+    designOverlay.onmousemove = (e) => {
+      const rect = previewFrame.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      try {
+        const doc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+        doc.querySelectorAll('[data-ew-hover]').forEach((el) => {
+          el.style.outline = '';
+          el.removeAttribute('data-ew-hover');
+        });
+        const el = doc.elementFromPoint(x, y);
+        if (el && el !== doc.body && el !== doc.documentElement && !el.hasAttribute('data-ew-highlight')) {
+          el.style.outline = '2px solid rgba(0,122,255,0.4)';
+          el.setAttribute('data-ew-hover', '');
+        }
+      } catch { /* cross-origin */ }
+    };
+  }
+}
+
+function selectDesignElement(el) {
+  // Highlight in iframe
+  el.style.outline = '3px solid #007AFF';
+  el.setAttribute('data-ew-highlight', '');
+
+  // Build a readable label
+  const tag = el.tagName.toLowerCase();
+  const cls = el.className ? `.${el.className.split(/\s+/).slice(0, 2).join('.')}` : '';
+  const text = (el.textContent || '').trim().slice(0, 40);
+  const label = `<${tag}${cls}>${text ? ` "${text}${el.textContent.trim().length > 40 ? '...' : ''}"` : ''}`;
+
+  // Get the outerHTML for context (limit size)
+  const html = el.outerHTML.slice(0, 2000);
+
+  designSelectedElement = {
+    label,
+    tag,
+    className: el.className,
+    html,
+    textContent: (el.textContent || '').trim().slice(0, 500),
+    selector: buildSelector(el),
+  };
+
+  // Show badge in input area
+  if (designSelection) designSelection.style.display = '';
+  if (designSelectionLabel) designSelectionLabel.textContent = label;
+}
+
+function buildSelector(el) {
+  if (el.id) return `#${el.id}`;
+  const tag = el.tagName.toLowerCase();
+  const cls = el.className ? `.${el.className.trim().split(/\s+/).join('.')}` : '';
+  return `${tag}${cls}`;
+}
+
+function clearDesignSelection() {
+  designSelectedElement = null;
+  if (designSelection) designSelection.style.display = 'none';
+  try {
+    const doc = previewFrame?.contentDocument || previewFrame?.contentWindow?.document;
+    if (doc) {
+      doc.querySelectorAll('[data-ew-highlight]').forEach((el) => {
+        el.style.outline = '';
+        el.removeAttribute('data-ew-highlight');
+      });
+    }
+  } catch { /* cross-origin */ }
+}
+
+if (designSelectionClear) {
+  designSelectionClear.addEventListener('click', clearDesignSelection);
+}
+
+/* ── Preview View Tabs (Preview / Design / JCR XML) ── */
+let currentPreviewView = 'preview';
+const previewViewTabs = document.getElementById('previewViewTabs');
+const jcrView = document.getElementById('jcrView');
+const jcrXmlContent = document.getElementById('jcrXmlContent');
+
+if (previewViewTabs) {
+  previewViewTabs.addEventListener('click', (e) => {
+    const tab = e.target.closest('.preview-view-tab');
+    if (!tab) return;
+    const view = tab.dataset.view;
+    if (view === currentPreviewView) return;
+
+    // Update tab states
+    previewViewTabs.querySelectorAll('.preview-view-tab').forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentPreviewView = view;
+
+    // Toggle views
+    if (view === 'design') {
+      enableDesignMode();
+      if (jcrView) jcrView.style.display = 'none';
+      if (previewFrame) previewFrame.style.display = '';
+    } else if (view === 'jcr') {
+      disableDesignMode();
+      if (previewFrame) previewFrame.style.display = 'none';
+      if (jcrView) jcrView.style.display = '';
+      loadJcrXml();
+    } else {
+      disableDesignMode();
+      clearDesignSelection();
+      if (jcrView) jcrView.style.display = 'none';
+      if (previewFrame) previewFrame.style.display = '';
+    }
+  });
+}
+
+/* ── JCR XML View ── */
+async function loadJcrXml() {
+  if (!jcrXmlContent) return;
+  const path = activeResourcePath || '/';
+  jcrXmlContent.textContent = 'Loading JCR structure...';
+
+  let html = null;
+
+  // Strategy 1: Try reading from iframe contentDocument (same-origin only)
+  try {
+    const doc = previewFrame?.contentDocument || previewFrame?.contentWindow?.document;
+    if (doc && doc.body && doc.body.innerHTML.trim()) {
+      html = doc.body.innerHTML;
+    }
+  } catch { /* cross-origin — expected */ }
+
+  // Strategy 2: Fetch .plain.html from preview origin
+  if (!html) {
+    try {
+      const url = `${AEM_ORG.previewOrigin}${path}.plain.html`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`${resp.status}`);
+      html = await resp.text();
+    } catch (err) {
+      jcrXmlContent.textContent = `<!-- Error loading JCR view: ${err.message} -->\n<!-- Path: ${path} -->\n<!-- Tip: JCR XML works best with same-origin preview or when CORS is enabled -->`;
+      return;
+    }
+  }
+
+  try {
+    const xml = htmlToJcrXml(html, path);
+    jcrXmlContent.textContent = xml;
+  } catch (err) {
+    jcrXmlContent.textContent = `<!-- Error parsing HTML to JCR: ${err.message} -->`;
+  }
+}
+
+function htmlToJcrXml(html, pagePath) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const lines = [];
+  const indent = (n) => '  '.repeat(n);
+  const pageName = pagePath.split('/').filter(Boolean).pop() || 'index';
+
+  lines.push('<?xml version="1.0" encoding="UTF-8"?>');
+  lines.push(`<jcr:root xmlns:jcr="http://www.jcp.org/jcr/1.0" xmlns:nt="http://www.jcp.org/jcr/nt/1.0" xmlns:sling="http://sling.apache.org/jcr/sling/1.0" xmlns:cq="http://www.day.com/jcr/cq/1.0"`);
+  lines.push(`  jcr:primaryType="cq:Page">`);
+  lines.push(`${indent(1)}<jcr:content`);
+  lines.push(`${indent(2)}jcr:primaryType="cq:PageContent"`);
+  lines.push(`${indent(2)}jcr:title="${pageName}"`);
+  lines.push(`${indent(2)}sling:resourceType="core/franklin/components/page/v1/page">`);
+
+  // Parse sections (separated by <hr> or section wrappers)
+  const body = doc.body;
+  let sectionIdx = 0;
+
+  // Split content by <hr> or direct div children
+  const children = [...body.children];
+  let currentSection = [];
+  const sections = [];
+
+  children.forEach((child) => {
+    if (child.tagName === 'HR') {
+      if (currentSection.length) sections.push(currentSection);
+      currentSection = [];
+    } else {
+      currentSection.push(child);
+    }
+  });
+  if (currentSection.length) sections.push(currentSection);
+
+  sections.forEach((sectionEls, si) => {
+    lines.push(`${indent(2)}<section_${si}`);
+    lines.push(`${indent(3)}jcr:primaryType="nt:unstructured"`);
+    lines.push(`${indent(3)}sling:resourceType="core/franklin/components/section/v1/section">`);
+
+    sectionEls.forEach((el, ei) => {
+      const tag = el.tagName.toLowerCase();
+      // Check if it's a block (has a class that's not generic)
+      const blockClass = el.className?.trim().split(/\s+/)[0];
+      const isBlock = el.tagName === 'DIV' && blockClass && !['section', 'default-content-wrapper'].includes(blockClass);
+
+      if (isBlock) {
+        lines.push(`${indent(3)}<${blockClass.replace(/[^a-z0-9_-]/gi, '_')}`);
+        lines.push(`${indent(4)}jcr:primaryType="nt:unstructured"`);
+        lines.push(`${indent(4)}sling:resourceType="core/franklin/components/block/v1/block"`);
+        lines.push(`${indent(4)}name="${blockClass}"`);
+
+        // Block children (rows)
+        const rows = [...el.children];
+        rows.forEach((row, ri) => {
+          const cols = [...row.children];
+          cols.forEach((col, ci) => {
+            const text = col.textContent?.trim().slice(0, 100);
+            if (text) {
+              lines.push(`${indent(4)}item_${ri}_${ci}="${escapeXml(text)}"`);
+            }
+          });
+        });
+
+        lines.push(`${indent(3)}/>`);
+      } else {
+        // Default content
+        const text = el.textContent?.trim().slice(0, 80);
+        const nodeName = tag === 'p' ? `text_${ei}` : `${tag}_${ei}`;
+        lines.push(`${indent(3)}<${nodeName}`);
+        lines.push(`${indent(4)}jcr:primaryType="nt:unstructured"`);
+
+        if (tag.match(/^h[1-6]$/)) {
+          lines.push(`${indent(4)}sling:resourceType="core/franklin/components/title/v1/title"`);
+          lines.push(`${indent(4)}jcr:title="${escapeXml(text || '')}"`);
+          lines.push(`${indent(4)}type="${tag}"`);
+        } else if (tag === 'img' || el.querySelector?.('img')) {
+          const img = tag === 'img' ? el : el.querySelector('img');
+          lines.push(`${indent(4)}sling:resourceType="core/franklin/components/image/v1/image"`);
+          if (img) lines.push(`${indent(4)}fileReference="${escapeXml(img.src || img.getAttribute('src') || '')}"`);
+        } else if (tag === 'a' || el.querySelector?.('a')) {
+          lines.push(`${indent(4)}sling:resourceType="core/franklin/components/button/v1/button"`);
+          const a = tag === 'a' ? el : el.querySelector('a');
+          if (a) {
+            lines.push(`${indent(4)}linkURL="${escapeXml(a.href || '')}"`);
+            lines.push(`${indent(4)}text="${escapeXml(a.textContent?.trim() || '')}"`);
+          }
+        } else {
+          lines.push(`${indent(4)}sling:resourceType="core/franklin/components/text/v1/text"`);
+          if (text) lines.push(`${indent(4)}text="${escapeXml(text)}"`);
+        }
+
+        lines.push(`${indent(3)}/>`);
+      }
+    });
+
+    lines.push(`${indent(2)}</section_${si}>`);
+  });
+
+  lines.push(`${indent(1)}</jcr:content>`);
+  lines.push('</jcr:root>');
+
+  return lines.join('\n');
+}
+
+function escapeXml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+/* ── Plan/Execute Mode Toggle ── */
+let currentMode = 'execute'; // 'execute' | 'plan'
+window.__EW_MODE = 'execute';
+const modeToggle = document.getElementById('modeToggle');
+if (modeToggle) {
+  modeToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mode-btn');
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    if (mode === currentMode) return;
+    currentMode = mode;
+    window.__EW_MODE = mode;
+    modeToggle.querySelectorAll('.mode-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    showToast(mode === 'plan' ? 'Plan mode — AI will analyze before making changes' : 'Execute mode — AI will make changes directly', 'info');
+  });
+}
+
+/* ── Content Packaging ── */
+const packageBtn = document.getElementById('packageBtn');
+const packageModal = document.getElementById('packageModal');
+const packageModalClose = document.getElementById('packageModalClose');
+const packageCancelBtn = document.getElementById('packageCancelBtn');
+const packageUploadBtn = document.getElementById('packageUploadBtn');
+const packagePages = document.getElementById('packagePages');
+const packageNameInput = document.getElementById('packageName');
+
+function openPackageModal() {
+  if (!packageModal) return;
+  // Populate with known pages
+  if (packagePages) {
+    const pages = sitePages.length > 0 ? sitePages : [{ path: '/', title: 'index' }];
+    packagePages.innerHTML = pages.map((p) =>
+      `<label class="package-page-item"><input type="checkbox" checked value="${escapeHtml(p.path)}"> ${escapeHtml(p.title || p.path)}</label>`
+    ).join('');
+  }
+  if (packageNameInput) {
+    packageNameInput.value = `${AEM_ORG.orgId || 'site'}-${AEM_ORG.repo || 'content'}`;
+  }
+  packageModal.style.display = '';
+}
+
+function closePackageModal() {
+  if (packageModal) packageModal.style.display = 'none';
+}
+
+async function uploadPackage() {
+  if (!packagePages) return;
+  const selected = [...packagePages.querySelectorAll('input:checked')].map((cb) => cb.value);
+  if (selected.length === 0) {
+    showToast('Select at least one page to package', 'warn');
+    return;
+  }
+
+  const pkgName = packageNameInput?.value || 'content-package';
+  const includeImages = document.getElementById('packageImages')?.checked ?? true;
+
+  closePackageModal();
+  showToast(`Packaging ${selected.length} page(s)...`, 'info');
+
+  // Fetch content for each page
+  const pages = [];
+  for (const path of selected) {
+    try {
+      const url = `${AEM_ORG.previewOrigin}${path}.plain.html`;
+      const resp = await fetch(url);
+      if (resp.ok) {
+        const html = await resp.text();
+        pages.push({ path, html });
+      }
+    } catch { /* skip */ }
+  }
+
+  // Build a simple content package (JSON bundle)
+  const pkg = {
+    name: pkgName,
+    created: new Date().toISOString(),
+    org: AEM_ORG.orgId,
+    repo: AEM_ORG.repo,
+    branch: AEM_ORG.branch,
+    includeImages,
+    pages,
+  };
+
+  // Download as JSON file
+  const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${pkgName}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showToast(`Package "${pkgName}" downloaded with ${pages.length} page(s)`, 'success');
+}
+
+if (packageBtn) packageBtn.addEventListener('click', openPackageModal);
+if (packageModalClose) packageModalClose.addEventListener('click', closePackageModal);
+if (packageCancelBtn) packageCancelBtn.addEventListener('click', closePackageModal);
+if (packageUploadBtn) packageUploadBtn.addEventListener('click', uploadPackage);
+
+// Locale selector change → filter resources by locale
+if (localeSelect) {
+  localeSelect.addEventListener('change', () => filterByLocale(localeSelect.value));
 }
 
 // Preview toolbar buttons
@@ -3215,7 +3930,7 @@ function buildOrgSelector() {
       opt.classList.add('org-option');
       if (p.id === activeId) opt.classList.add('active');
       opt.dataset.profile = p.id;
-      opt.innerHTML = `<span class="org-name">${p.name}</span><span class="org-vertical">${p.vertical}</span>`;
+      opt.innerHTML = `<span class="org-name">${escapeHtml(p.name)}</span><span class="org-vertical">${escapeHtml(p.vertical)}</span>`;
       opt.addEventListener('click', () => switchProfile(p.id));
 
       const del = document.createElement('button');
@@ -3237,7 +3952,7 @@ function buildOrgSelector() {
       opt.classList.add('org-option');
       if (p.id === activeId) opt.classList.add('active');
       opt.dataset.profile = p.id;
-      opt.innerHTML = `<span class="org-name">${p.name}</span><span class="org-vertical">${p.vertical}</span>`;
+      opt.innerHTML = `<span class="org-name">${escapeHtml(p.name)}</span><span class="org-vertical">${escapeHtml(p.vertical)}</span>`;
       opt.addEventListener('click', () => switchProfile(p.id));
       container.appendChild(opt);
     }
@@ -3449,14 +4164,15 @@ Body Text (excerpt): ${bodyText}`;
     // Build preview
     const preview = document.getElementById('profilePreview');
     const colors = profile.brandVoice?.colorPalette;
+    const safeColor = (v) => /^(#[0-9a-f]{3,8}|rgb\([\d\s,.%]+\)|[a-z]+)$/i.test(v) ? v : '#ccc';
     preview.innerHTML = `
-      <div class="pv-name">${profile.name}</div>
-      <div class="pv-meta">${profile.vertical} &bull; ${profile.tier}</div>
-      <div class="pv-section"><div class="pv-label">Brand Voice</div>${profile.brandVoice?.tone || 'Not specified'} — ${profile.brandVoice?.style || ''}</div>
-      ${colors ? `<div class="pv-section"><div class="pv-label">Brand Colors</div><div class="pv-colors">${Object.entries(colors).map(([k, v]) => `<div class="pv-swatch" style="background:${v}" title="${k}: ${v}"></div>`).join('')}</div></div>` : ''}
-      <div class="pv-section"><div class="pv-label">Segments (${profile.segments?.length || 0})</div>${profile.segments?.map((s) => s.name).join(', ') || 'None'}</div>
-      <div class="pv-section"><div class="pv-label">Approval Chain (${profile.approvalChain?.length || 0} steps)</div>${profile.approvalChain?.map((s) => s.role).join(' → ') || 'None'}</div>
-      <div class="pv-section"><div class="pv-label">Legal Rules (${profile.legalSLA?.specialRules?.length || 0})</div>${profile.legalSLA?.specialRules?.slice(0, 3).join('; ') || 'None'}${(profile.legalSLA?.specialRules?.length || 0) > 3 ? '...' : ''}</div>
+      <div class="pv-name">${escapeHtml(profile.name)}</div>
+      <div class="pv-meta">${escapeHtml(profile.vertical)} &bull; ${escapeHtml(profile.tier)}</div>
+      <div class="pv-section"><div class="pv-label">Brand Voice</div>${escapeHtml(profile.brandVoice?.tone || 'Not specified')} — ${escapeHtml(profile.brandVoice?.style || '')}</div>
+      ${colors ? `<div class="pv-section"><div class="pv-label">Brand Colors</div><div class="pv-colors">${Object.entries(colors).map(([k, v]) => `<div class="pv-swatch" style="background:${safeColor(v)}" title="${escapeHtml(k)}: ${escapeHtml(v)}"></div>`).join('')}</div></div>` : ''}
+      <div class="pv-section"><div class="pv-label">Segments (${profile.segments?.length || 0})</div>${escapeHtml(profile.segments?.map((s) => s.name).join(', ') || 'None')}</div>
+      <div class="pv-section"><div class="pv-label">Approval Chain (${profile.approvalChain?.length || 0} steps)</div>${escapeHtml(profile.approvalChain?.map((s) => s.role).join(' → ') || 'None')}</div>
+      <div class="pv-section"><div class="pv-label">Legal Rules (${profile.legalSLA?.specialRules?.length || 0})</div>${escapeHtml(profile.legalSLA?.specialRules?.slice(0, 3).join('; ') || 'None')}${(profile.legalSLA?.specialRules?.length || 0) > 3 ? '...' : ''}</div>
     `;
 
     // Show editable JSON
@@ -3488,7 +4204,10 @@ async function init() {
   buildOrgSelector();
   initProfileGenerator();
 
-  console.log('[EW] init v24 — GitHub PAT auth + content writes (AEMCoder pattern)');
+  console.log('[EW] init v25 — repo management, real branch picker, recent repos');
+
+  // Render recent repos on home view
+  renderRecentRepos();
 
   // Initialize IMS library (passive — no auto-redirect, no forced sign-in)
   try {

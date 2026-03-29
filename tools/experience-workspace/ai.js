@@ -12,7 +12,13 @@ import { buildCustomerContext, getActiveProfile } from './customer-profiles.js';
 import { KNOWN_SITES, resolveSite, listKnownSites, buildKnownSitesPrompt } from './known-sites.js';
 import * as da from './da-client.js';
 import { isSignedIn } from './ims.js';
-import { hasGitHubToken, writeContent as ghWriteContent, triggerPreview as ghTriggerPreview } from './github-content.js';
+import { hasGitHubToken, writeContent as ghWriteContent, triggerPreview as ghTriggerPreview, getRepoInfo, listBranches as ghListBranches } from './github-content.js';
+import * as aemContent from './aem-content-mcp-client.js';
+import * as govMcp from './governance-mcp-client.js';
+import * as discoveryMcp from './discovery-mcp-client.js';
+import { getSiteType } from './site-detect.js';
+import { buildPlaybookPrompt } from './xsc-playbook.js';
+import { buildKnowledgePrompt } from './aem-knowledge.js';
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-20250514';
@@ -217,6 +223,33 @@ const AEM_TOOLS = [
         site_id: { type: 'string', description: 'Target site' },
       },
       required: ['launch_id'],
+    },
+  },
+
+  /* ─── Site Management (GitHub-powered) ─── */
+
+  {
+    name: 'switch_site',
+    description: 'Switch the workspace to a different AEM EDS site by org/repo. Updates preview, file tree, and branch picker. Use when the user says "switch to [org/repo]" or "connect to [org/repo]".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        org: { type: 'string', description: 'GitHub org or owner' },
+        repo: { type: 'string', description: 'Repository name' },
+      },
+      required: ['org', 'repo'],
+    },
+  },
+  {
+    name: 'get_site_info',
+    description: 'Get detailed info about the currently connected site or a specified org/repo. Returns default branch, branches, visibility, preview/live URLs. Useful for understanding site configuration.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        org: { type: 'string', description: 'GitHub org (default: current site)' },
+        repo: { type: 'string', description: 'Repository name (default: current site)' },
+      },
+      required: [],
     },
   },
 
@@ -993,50 +1026,75 @@ async function executeTool(name, input) {
     }
 
     case 'copy_aem_page': {
-      const pageId = `page-${Date.now().toString(36)}`;
-      const etag = `W/"${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}"`;
-      const org = profile.orgId?.toLowerCase() || 'org';
-      const repo = profile.repo || 'site';
-      const previewBase = `https://main--${repo}--${org}.aem.page`;
+      const siteType = getSiteType();
+      const org = window.__EW_ORG?.orgId || profile.orgId?.toLowerCase() || 'org';
+      const repo = window.__EW_ORG?.repo || profile.repo || 'site';
+      const branch = window.__EW_ORG?.branch || 'main';
+
+      // Try real AEM Content MCP first (for AEM CS / xwalk sites)
+      if (siteType === 'aem-cs' && isSignedIn()) {
+        try {
+          const host = siteType === 'aem-cs' ? window.__EW_AEM_HOST : null;
+          const result = await aemContent.copyPage(host, input.source_path, input.destination_path, input.title);
+          return JSON.stringify({
+            status: 'created',
+            ...result,
+            path: input.destination_path,
+            title: input.title,
+            copied_from: input.source_path,
+            message: `Page created at ${input.destination_path} from template ${input.source_path} via AEM Content MCP`,
+          }, null, 2);
+        } catch (err) {
+          console.warn('[copy_aem_page] AEM Content MCP failed, falling back:', err.message);
+        }
+      }
+
+      // Fallback: construct response with preview URLs (DA path or demo mode)
+      const previewBase = `https://${branch}--${repo}--${org}.aem.page`;
       const previewUrl = `${previewBase}${input.destination_path}`;
       const ueUrl = `https://experience.adobe.com/#/@${org}/aem/editor/canvas${input.destination_path}?repo=${repo}`;
       const daUrl = `https://da.live/edit#/${org}/${repo}${input.destination_path}`;
+      const etag = `W/"${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}"`;
       return JSON.stringify({
         status: 'created',
-        page_id: pageId,
         path: input.destination_path,
         title: input.title,
         copied_from: input.source_path,
         etag,
         preview_url: previewUrl,
-        edit_urls: {
-          universal_editor: ueUrl,
-          document_authoring: daUrl,
-        },
+        edit_urls: { universal_editor: ueUrl, document_authoring: daUrl },
         message: `Page created at ${input.destination_path} from template ${input.source_path}`,
-        hint: 'Use the etag value when calling patch_aem_page_content to avoid conflicts. Open in Universal Editor or DA to edit visually.',
+        hint: 'Use the etag value when calling patch_aem_page_content to avoid conflicts.',
+        _backend: siteType === 'aem-cs' ? 'aem-cs-fallback' : 'da',
       }, null, 2);
     }
 
     case 'patch_aem_page_content': {
+      const siteType = getSiteType();
+      const org = window.__EW_ORG?.orgId || profile.orgId?.toLowerCase() || 'org';
+      const repo = window.__EW_ORG?.repo || profile.repo || 'site';
+      const branch = window.__EW_ORG?.branch || 'main';
       const fields = Object.keys(input.updates || {});
-      const org = profile.orgId?.toLowerCase() || 'org';
-      const repo = profile.repo || 'site';
-      const previewBase = `https://main--${repo}--${org}.aem.page`;
-      const previewUrl = `${previewBase}${input.page_path}`;
-      const ueUrl = `https://experience.adobe.com/#/@${org}/aem/editor/canvas${input.page_path}?repo=${repo}`;
-      const daUrl = `https://da.live/edit#/${org}/${repo}${input.page_path}`;
 
-      // Simulate ETag conflict if no etag provided and this is not the first patch
-      if (!input.etag && input._retry) {
-        return JSON.stringify({
-          status: 'conflict',
-          error: 'ETag mismatch — the page was modified since you last read it.',
-          hint: 'Call get_page_content to fetch the current ETag, then retry patch_aem_page_content with the fresh etag value.',
-          page_path: input.page_path,
-        }, null, 2);
+      // Try real AEM Content MCP (for AEM CS / xwalk sites)
+      if (siteType === 'aem-cs' && isSignedIn()) {
+        try {
+          const host = window.__EW_AEM_HOST || null;
+          const result = await aemContent.updatePage(host, input.page_path, input.updates, input.etag);
+          return JSON.stringify({
+            status: 'updated',
+            ...result,
+            page_path: input.page_path,
+            updated_fields: fields,
+            message: `Updated ${fields.length} field(s) on ${input.page_path} via AEM Content MCP`,
+          }, null, 2);
+        } catch (err) {
+          console.warn('[patch_aem_page_content] AEM Content MCP failed, falling back:', err.message);
+        }
       }
 
+      // Fallback
+      const previewBase = `https://${branch}--${repo}--${org}.aem.page`;
       const newEtag = `W/"${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}"`;
       return JSON.stringify({
         status: 'updated',
@@ -1044,43 +1102,78 @@ async function executeTool(name, input) {
         updated_fields: fields,
         field_count: fields.length,
         etag: newEtag,
-        preview_url: previewUrl,
-        edit_urls: {
-          universal_editor: ueUrl,
-          document_authoring: daUrl,
-        },
+        preview_url: `${previewBase}${input.page_path}`,
         message: `Updated ${fields.length} field(s) on ${input.page_path}: ${fields.join(', ')}`,
-        hint: 'Page updated. Open in Universal Editor or DA to verify changes visually.',
+        _backend: siteType === 'aem-cs' ? 'aem-cs-fallback' : 'da',
       }, null, 2);
     }
 
     case 'create_aem_launch': {
+      const siteType = getSiteType();
+      const org = window.__EW_ORG?.orgId || profile.orgId?.toLowerCase() || 'org';
+      const repo = window.__EW_ORG?.repo || profile.repo || 'site';
+      const branch = window.__EW_ORG?.branch || 'main';
+
+      // Try real AEM Content MCP
+      if (siteType === 'aem-cs' && isSignedIn()) {
+        try {
+          const host = window.__EW_AEM_HOST || null;
+          const result = await aemContent.createLaunch(host, [input.page_path], input.launch_name);
+          return JSON.stringify({
+            status: 'created',
+            ...result,
+            launch_name: input.launch_name,
+            pages: [input.page_path],
+            state: 'open',
+            message: `Launch "${input.launch_name}" created via AEM Content MCP`,
+          }, null, 2);
+        } catch (err) {
+          console.warn('[create_aem_launch] AEM Content MCP failed, falling back:', err.message);
+        }
+      }
+
+      // Fallback
       const launchId = `launch-${Date.now().toString(36)}`;
-      const org = profile.orgId?.toLowerCase() || 'org';
-      const repo = profile.repo || 'site';
-      const previewBase = `https://main--${repo}--${org}.aem.page`;
-      const previewUrl = `${previewBase}${input.page_path}?launch=${launchId}`;
-      const ueUrl = `https://experience.adobe.com/#/@${org}/aem/editor/canvas${input.page_path}?repo=${repo}&launch=${launchId}`;
+      const previewBase = `https://${branch}--${repo}--${org}.aem.page`;
       return JSON.stringify({
         status: 'created',
         launch_id: launchId,
         launch_name: input.launch_name,
         pages: [input.page_path],
-        preview_url: previewUrl,
-        edit_urls: {
-          universal_editor: ueUrl,
-        },
+        preview_url: `${previewBase}${input.page_path}?launch=${launchId}`,
         state: 'open',
-        message: `Launch "${input.launch_name}" created. Page is in review, not live. Send for governance check before promoting.`,
+        message: `Launch "${input.launch_name}" created. Page is in review, not live.`,
+        _backend: siteType === 'aem-cs' ? 'aem-cs-fallback' : 'da',
       }, null, 2);
     }
 
     case 'promote_aem_launch': {
+      const siteType = getSiteType();
+
+      // Try real AEM Content MCP
+      if (siteType === 'aem-cs' && isSignedIn()) {
+        try {
+          const host = window.__EW_AEM_HOST || null;
+          const result = await aemContent.promoteLaunch(host, input.launch_id);
+          return JSON.stringify({
+            status: 'promoted',
+            ...result,
+            launch_id: input.launch_id,
+            message: `Launch ${input.launch_id} promoted via AEM Content MCP`,
+            published_at: new Date().toISOString(),
+          }, null, 2);
+        } catch (err) {
+          console.warn('[promote_aem_launch] AEM Content MCP failed, falling back:', err.message);
+        }
+      }
+
+      // Fallback
       return JSON.stringify({
         status: 'promoted',
         launch_id: input.launch_id,
         message: `Launch ${input.launch_id} promoted. Page is now live.`,
         published_at: new Date().toISOString(),
+        _backend: siteType === 'aem-cs' ? 'aem-cs-fallback' : 'da',
       }, null, 2);
     }
 
@@ -1283,27 +1376,87 @@ async function executeTool(name, input) {
       }
     }
 
+    /* ─── Site Management (GitHub-powered) ─── */
+
+    case 'switch_site': {
+      const { org, repo } = input;
+      if (!org || !repo) return JSON.stringify({ error: 'Both org and repo are required.' });
+      // Dispatch a custom event that app.js listens for
+      window.dispatchEvent(new CustomEvent('ew-switch-site', { detail: { org, repo } }));
+      return JSON.stringify({
+        status: 'switching',
+        _action: 'switch_site',
+        _org: org,
+        _repo: repo,
+        message: `Switching to ${org}/${repo}...`,
+      }, null, 2);
+    }
+
+    case 'get_site_info': {
+      const org = input.org || window.__EW_ORG?.orgId;
+      const repo = input.repo || window.__EW_ORG?.repo;
+      if (!org || !repo) return JSON.stringify({ error: 'No site connected. Provide org and repo, or connect a site first.' });
+
+      const info = { org, repo };
+      const branch = window.__EW_ORG?.branch || 'main';
+      info.previewUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.page`;
+      info.liveUrl = `https://${branch}--${repo.toLowerCase()}--${org.toLowerCase()}.aem.live`;
+      info.currentBranch = branch;
+
+      if (hasGitHubToken()) {
+        try {
+          const meta = await getRepoInfo(org, repo);
+          info.defaultBranch = meta.defaultBranch;
+          info.isPrivate = meta.isPrivate;
+          info.description = meta.description;
+        } catch { /* skip */ }
+        try {
+          const branches = await ghListBranches(org, repo);
+          info.branches = branches.map((b) => b.name);
+        } catch { /* skip */ }
+      }
+      return JSON.stringify(info, null, 2);
+    }
+
     /* ─── Discovery Agent ─── */
 
     case 'search_dam_assets': {
-      const dam = profile.damTaxonomy || { root: '/content/dam', folders: ['images', 'brand'], namingConvention: 'asset-name' };
-      const limit = input.limit || 6;
       const query = input.query || '';
       const type = input.asset_type || 'image';
+      const limit = input.limit || 6;
+
+      // Try real Discovery MCP first (for signed-in users with AEM CS)
+      if (isSignedIn()) {
+        try {
+          const host = window.__EW_AEM_HOST || null;
+          const result = await discoveryMcp.searchAssets(host, query, {
+            assetType: type,
+            limit,
+            folder: input.folder,
+            tags: input.tags,
+          });
+          return JSON.stringify({
+            query,
+            ...result,
+            _backend: 'discovery-mcp',
+            message: `Found assets matching "${query.slice(0, 50)}" via AEM Discovery MCP`,
+          }, null, 2);
+        } catch (err) {
+          console.warn('[search_dam_assets] Discovery MCP failed, falling back to demo:', err.message);
+        }
+      }
+
+      // Fallback: generate contextual demo results
+      const dam = profile.damTaxonomy || { root: '/content/dam', folders: ['images', 'brand'], namingConvention: 'asset-name' };
       const searchFolder = input.folder || dam.root;
       const tags = input.tags || [];
       const dateRange = input.date_range || '';
       const exclude = input.exclude || '';
 
-      // Generate contextual asset results based on the query and customer DAM
       const keywords = query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-      // Remove excluded keywords from results
       const excludeWords = exclude.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
       const filteredKeywords = keywords.filter((k) => !excludeWords.some((e) => k.includes(e)));
       const useKeywords = filteredKeywords.length > 0 ? filteredKeywords : (keywords.length > 0 ? keywords : ['asset']);
-
-      // Stock photo seeds — deterministic thumbnails that actually render
-      const stockSeeds = ['office', 'mountain', 'technology', 'cityscape', 'nature', 'workspace', 'abstract', 'building', 'product', 'team', 'marketing', 'digital'];
 
       const assets = [];
       for (let i = 0; i < limit; i++) {
@@ -1315,7 +1468,6 @@ async function executeTool(name, input) {
         const thumbUrl = `https://picsum.photos/seed/${encodeURIComponent(seed)}/400/267`;
         const dmDeliveryUrl = `https://delivery-p12345-e67890.adobeaemcloud.com/adobe/dynamicmedia/deliver/${assetName}/asset-${i + 1}.webp?width=1200&quality=85`;
 
-        // Stable dates — spread evenly across range
         const maxAge = dateRange.includes('6 month') ? 180 : dateRange.includes('12 month') ? 365 : 90;
         const uploadDate = new Date(Date.now() - ((i + 1) * maxAge / limit) * 86400000);
 
@@ -1344,28 +1496,38 @@ async function executeTool(name, input) {
       }
 
       return JSON.stringify({
-        query: input.query,
+        query,
         total_results: assets.length,
-        filter: {
-          type,
-          approved_only: input.approved_only !== false,
-          folder: searchFolder,
-          tags: tags.length > 0 ? tags : undefined,
-          date_range: dateRange || undefined,
-          excluded: exclude || undefined,
-        },
+        filter: { type, approved_only: input.approved_only !== false, folder: searchFolder },
         assets,
-        message: `Found ${assets.length} approved ${type}(s) matching "${query.slice(0, 50)}"${tags.length > 0 ? ` tagged [${tags.join(', ')}]` : ''}${dateRange ? ` from ${dateRange}` : ''}${exclude ? ` (excluding: ${exclude})` : ''}`,
+        _backend: 'demo',
+        message: `Found ${assets.length} approved ${type}(s) matching "${query.slice(0, 50)}"`,
       }, null, 2);
     }
 
     /* ─── Governance Agent ─── */
 
     case 'run_governance_check': {
+      // Try real Experience Governance MCP first
+      if (isSignedIn()) {
+        try {
+          const host = window.__EW_AEM_HOST || null;
+          const result = await govMcp.checkPagePolicy(host, input.page_path);
+          return JSON.stringify({
+            page_path: input.page_path,
+            ...result,
+            _backend: 'governance-mcp',
+            message: `Governance check completed via AEM Experience Governance MCP`,
+          }, null, 2);
+        } catch (err) {
+          console.warn('[run_governance_check] Governance MCP failed, falling back to local:', err.message);
+        }
+      }
+
+      // Fallback: local governance simulation
       const checks = input.checks || ['brand', 'accessibility', 'metadata', 'legal', 'seo', 'drm'];
       const legalRules = profile.legalSLA?.specialRules || [];
       const brandVoice = profile.brandVoice || {};
-      // Pull brand policies from admin panel (injected by app.js saveBrandPolicies)
       const brandPolicies = profile.brandPolicies || [];
 
       const results = {};
@@ -3518,7 +3680,7 @@ Senior AEM architect who understands marketing KPIs. Technical precision meets b
 
 /* ── Build System Prompt Parts ── */
 function buildSystemParts(context = {}) {
-  const parts = [AEM_SYSTEM_PROMPT, buildCustomerContext(), buildKnownSitesPrompt()];
+  const parts = [AEM_SYSTEM_PROMPT, buildKnowledgePrompt(), buildPlaybookPrompt(), buildCustomerContext(), buildKnownSitesPrompt()];
 
   if (context.pageHTML) {
     parts.push(`\n\nCurrent page HTML (from iframe preview):\n\`\`\`html\n${context.pageHTML.slice(0, 15000)}\n\`\`\``);
