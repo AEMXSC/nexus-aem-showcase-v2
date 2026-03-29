@@ -1,20 +1,20 @@
-export default async function decorate(block) {
+export default function decorate(block) {
   const footerEl = block.closest('footer');
   footerEl.innerHTML = `
     <div class="footer-inner">
       <div class="footer-grid">
         <div class="footer-brand">
           <svg width="24" height="20" viewBox="0 0 30 26" fill="none" aria-hidden="true">
-            <path d="M11.5 0H0V26L11.5 0Z" fill="hsl(0 100% 46%)"/>
-            <path d="M18.5 0H30V26L18.5 0Z" fill="hsl(0 100% 46%)"/>
-            <path d="M15 9.5L21.5 26H17L14.5 19H10L15 9.5Z" fill="hsl(0 100% 46%)"/>
+            <path d="M11.5 0H0V26L11.5 0Z" fill="#EB1000"/>
+            <path d="M18.5 0H30V26L18.5 0Z" fill="#EB1000"/>
+            <path d="M15 9.5L21.5 26H17L14.5 19H10L15 9.5Z" fill="#EB1000"/>
           </svg>
           <div>
-            <div class="footer-logo-text">AEM <span class="footer-logo-xsc">XSC</span></div>
-            <p class="footer-tagline">Expert Solution Consulting</p>
+            <div class="footer-logo-text">Adobe <span class="footer-logo-accent">Experience Manager</span></div>
+            <p class="footer-tagline">Edge Delivery Services</p>
           </div>
         </div>
-        <nav class="footer-nav">
+        <nav class="footer-nav" aria-label="Footer">
           <a href="#the-team">Team</a>
           <a href="#vertical-coverage">Verticals</a>
           <a href="#the-three-revenue-motions">Motions</a>
@@ -29,7 +29,7 @@ export default async function decorate(block) {
           </span>
         </div>
       </div>
-      <div class="footer-copyright">&copy; 2026 Adobe. Internal use only.</div>
+      <div class="footer-copyright">&copy; 2026 Adobe. All rights reserved.</div>
     </div>
   `;
 }

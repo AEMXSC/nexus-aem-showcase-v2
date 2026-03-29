@@ -32,11 +32,18 @@ header nav > div,
   box-sizing: border-box;
 }
 
-/* brand */
+/* ---- brand group (AEM logo + optional customer logo) ---- */
+.nav-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
 .nav-brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   text-decoration: none;
 }
 
@@ -47,18 +54,39 @@ header nav > div,
   mix-blend-mode: multiply;
 }
 
+.nav-adobe-logo {
+  flex-shrink: 0;
+}
+
 .nav-logo-text {
-  font-size: 0.875rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: #fff;
+  white-space: nowrap;
 }
 
-.nav-logo-xsc {
-  color: #e34234;
+.nav-logo-accent {
+  font-weight: 400;
+  opacity: 0.85;
 }
 
-/* nav links */
+/* co-brand separator */
+.nav-cobrand-sep {
+  margin: 0 0.65rem;
+  font-size: 1rem;
+  color: rgb(255 255 255 / 30%);
+  font-weight: 300;
+}
+
+/* customer co-brand logo */
+.nav-customer-logo {
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* ---- nav links ---- */
 .nav-links {
   display: flex;
   list-style: none;
@@ -69,7 +97,7 @@ header nav > div,
 
 .nav-links a {
   color: rgb(255 255 255 / 75%);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
   text-decoration: none;
   transition: color 0.2s ease;
@@ -79,7 +107,34 @@ header nav > div,
   color: #fff;
 }
 
-/* scrolled state — base styles above, overrides below */
+/* ---- nav actions (admin + CTA) ---- */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.nav-admin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 65%);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.nav-admin-btn:hover {
+  background: rgb(255 255 255 / 15%);
+  color: #fff;
+}
+
+/* ---- scrolled state ---- */
 .nav-wrapper.scrolled {
   background: #fff !important;
   box-shadow: 0 1px 12px rgb(0 0 0 / 10%) !important;
@@ -89,8 +144,8 @@ header nav > div,
   color: #1a1a1a !important;
 }
 
-.nav-wrapper.scrolled .nav-logo-xsc {
-  color: #eb1000 !important;
+.nav-wrapper.scrolled .nav-logo-accent {
+  color: #555 !important;
 }
 
 .nav-wrapper.scrolled .nav-links a {
@@ -99,6 +154,20 @@ header nav > div,
 
 .nav-wrapper.scrolled .nav-links a:hover {
   color: #eb1000 !important;
+}
+
+.nav-wrapper.scrolled .nav-cobrand-sep {
+  color: rgb(0 0 0 / 20%);
+}
+
+.nav-wrapper.scrolled .nav-admin-btn {
+  background: rgb(0 0 0 / 6%);
+  color: #666;
+}
+
+.nav-wrapper.scrolled .nav-admin-btn:hover {
+  background: rgb(0 0 0 / 10%);
+  color: #1a1a1a;
 }
 
 .header-wrapper.scrolled .nav-brand img,
@@ -243,4 +312,207 @@ header nav > div,
   .nav-open.scrolled {
     background: #fff !important;
   }
+
+  .nav-logo-accent {
+    display: none;
+  }
+
+  .nav-cta {
+    display: none;
+  }
+}
+
+/* ================================================================
+   Admin Panel Modal
+   ================================================================ */
+.admin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-modal[hidden] {
+  display: none;
+}
+
+.admin-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 60%);
+  backdrop-filter: blur(4px);
+}
+
+.admin-panel {
+  position: relative;
+  width: 420px;
+  max-width: 92vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: #1a1f2e;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 50%);
+  color: #fff;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.admin-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.admin-close {
+  background: none;
+  border: none;
+  color: rgb(255 255 255 / 50%);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.admin-close:hover {
+  color: #fff;
+}
+
+.admin-body {
+  padding: 1.5rem;
+}
+
+.admin-section h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.admin-hint {
+  margin: 0 0 1rem;
+  font-size: 0.75rem;
+  color: rgb(255 255 255 / 50%);
+}
+
+.admin-logo-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  background: rgb(255 255 255 / 5%);
+  border: 1px dashed rgb(255 255 255 / 15%);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+}
+
+.admin-logo-preview img {
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.admin-logo-placeholder {
+  font-size: 0.75rem;
+  color: rgb(255 255 255 / 30%);
+}
+
+.admin-field {
+  margin-bottom: 0.75rem;
+}
+
+.admin-field label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgb(255 255 255 / 60%);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+
+.admin-field input[type="url"],
+.admin-field input[type="text"],
+.admin-field input[type="number"] {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  background: rgb(255 255 255 / 6%);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.8rem;
+  box-sizing: border-box;
+}
+
+.admin-field input:focus {
+  outline: none;
+  border-color: #eb1000;
+}
+
+.admin-field input[type="file"] {
+  font-size: 0.75rem;
+  color: rgb(255 255 255 / 70%);
+}
+
+.admin-field input[type="file"]::file-selector-button {
+  background: rgb(255 255 255 / 10%);
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 4px;
+  color: #fff;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.7rem;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+.admin-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.admin-field-small {
+  flex: 1;
+}
+
+.admin-field-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.admin-btn {
+  padding: 0.55rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+
+.admin-btn:hover {
+  filter: brightness(1.1);
+}
+
+.admin-btn-primary {
+  background: #eb1000;
+  color: #fff;
+}
+
+.admin-btn-danger {
+  background: rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 60%);
+}
+
+.admin-btn-danger:hover {
+  background: rgb(220 38 38 / 15%);
+  color: #ef4444;
 }
